@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+  <title id="title">Notification Saver icon</title>
+  <desc id="desc">A bell above a tray with an export arrow</desc>
+  <rect width="108" height="108" rx="24" fill="#173D2F" />
+  <path fill="#F7E7CD" d="M30 20h48c5.5 0 10 4.5 10 10v20c0 5.5-4.5 10-10 10H30c-5.5 0-10-4.5-10-10V30c0-5.5 4.5-10 10-10Z" />
+  <path fill="#173D2F" d="M54 31c-8.3 0-15 6.7-15 15v8.7L34 62h40l-5-7.3V46c0-8.3-6.7-15-15-15Zm-5.3 36c1.3 3 3 4.5 5.3 4.5s4-1.5 5.3-4.5H48.7Z" />
+  <path fill="#D8894E" d="m54 56 10 10h-6v8h-8v-8h-6Z" />
+  <path fill="#F7E7CD" d="M24 70h60c4.4 0 8 3.6 8 8v8c0 4.4-3.6 8-8 8H24c-4.4 0-8-3.6-8-8v-8c0-4.4 3.6-8 8-8Z" />
+  <path fill="#173D2F" d="M39 77h30v5H39Z" />
+</svg>
