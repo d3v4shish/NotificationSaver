@@ -1,0 +1,852 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "7cb796e73edb93ee43c4d2e8df0d938e",
+    "entities": [
+      {
+        "tableName": "conversations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `portableId` TEXT NOT NULL, `packageName` TEXT NOT NULL, `appLabel` TEXT NOT NULL, `canonicalKey` TEXT NOT NULL, `identitySource` TEXT NOT NULL, `identityConfidence` INTEGER NOT NULL, `sourceTitle` TEXT, `manualTitle` TEXT, `latestPreview` TEXT, `latestActivityAt` INTEGER NOT NULL, `recordCount` INTEGER NOT NULL, `messageCount` INTEGER NOT NULL, `isPinned` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portableId",
+            "columnName": "portableId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appLabel",
+            "columnName": "appLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalKey",
+            "columnName": "canonicalKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identitySource",
+            "columnName": "identitySource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityConfidence",
+            "columnName": "identityConfidence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceTitle",
+            "columnName": "sourceTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "manualTitle",
+            "columnName": "manualTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latestPreview",
+            "columnName": "latestPreview",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latestActivityAt",
+            "columnName": "latestActivityAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordCount",
+            "columnName": "recordCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageCount",
+            "columnName": "messageCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPinned",
+            "columnName": "isPinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_conversations_portableId",
+            "unique": true,
+            "columnNames": [
+              "portableId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_conversations_portableId` ON `${TABLE_NAME}` (`portableId`)"
+          },
+          {
+            "name": "index_conversations_packageName_canonicalKey",
+            "unique": true,
+            "columnNames": [
+              "packageName",
+              "canonicalKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_conversations_packageName_canonicalKey` ON `${TABLE_NAME}` (`packageName`, `canonicalKey`)"
+          },
+          {
+            "name": "index_conversations_isPinned_latestActivityAt",
+            "unique": false,
+            "columnNames": [
+              "isPinned",
+              "latestActivityAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conversations_isPinned_latestActivityAt` ON `${TABLE_NAME}` (`isPinned`, `latestActivityAt`)"
+          },
+          {
+            "name": "index_conversations_latestActivityAt",
+            "unique": false,
+            "columnNames": [
+              "latestActivityAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conversations_latestActivityAt` ON `${TABLE_NAME}` (`latestActivityAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "notification_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `portableId` TEXT NOT NULL, `systemKey` TEXT NOT NULL, `packageName` TEXT NOT NULL, `appLabel` TEXT NOT NULL, `notificationId` INTEGER NOT NULL, `notificationTag` TEXT, `userId` INTEGER NOT NULL, `channelId` TEXT, `groupKey` TEXT, `shortcutId` TEXT, `locusId` TEXT, `lifecycleStartedAt` INTEGER NOT NULL, `lastUpdatedAt` INTEGER NOT NULL, `endedAt` INTEGER, `endReason` INTEGER, `latestTitle` TEXT, `latestBody` TEXT, `latestBigText` TEXT, `latestSubText` TEXT, `senderName` TEXT, `conversationTitle` TEXT, `category` TEXT NOT NULL, `tags` TEXT NOT NULL, `importance` INTEGER, `visibility` INTEGER NOT NULL, `notificationFlags` INTEGER NOT NULL, `revisionCount` INTEGER NOT NULL, `conversationId` INTEGER, `isActive` INTEGER NOT NULL, `isGroupSummary` INTEGER NOT NULL, `wasRecovered` INTEGER NOT NULL, FOREIGN KEY(`conversationId`) REFERENCES `conversations`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portableId",
+            "columnName": "portableId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "systemKey",
+            "columnName": "systemKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appLabel",
+            "columnName": "appLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationId",
+            "columnName": "notificationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationTag",
+            "columnName": "notificationTag",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "groupKey",
+            "columnName": "groupKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shortcutId",
+            "columnName": "shortcutId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "locusId",
+            "columnName": "locusId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lifecycleStartedAt",
+            "columnName": "lifecycleStartedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdatedAt",
+            "columnName": "lastUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endReason",
+            "columnName": "endReason",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "latestTitle",
+            "columnName": "latestTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latestBody",
+            "columnName": "latestBody",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latestBigText",
+            "columnName": "latestBigText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latestSubText",
+            "columnName": "latestSubText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conversationTitle",
+            "columnName": "conversationTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importance",
+            "columnName": "importance",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "visibility",
+            "columnName": "visibility",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationFlags",
+            "columnName": "notificationFlags",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revisionCount",
+            "columnName": "revisionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conversationId",
+            "columnName": "conversationId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isGroupSummary",
+            "columnName": "isGroupSummary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wasRecovered",
+            "columnName": "wasRecovered",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_records_portableId",
+            "unique": true,
+            "columnNames": [
+              "portableId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_notification_records_portableId` ON `${TABLE_NAME}` (`portableId`)"
+          },
+          {
+            "name": "index_notification_records_systemKey_isActive",
+            "unique": false,
+            "columnNames": [
+              "systemKey",
+              "isActive"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_records_systemKey_isActive` ON `${TABLE_NAME}` (`systemKey`, `isActive`)"
+          },
+          {
+            "name": "index_notification_records_lastUpdatedAt",
+            "unique": false,
+            "columnNames": [
+              "lastUpdatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_records_lastUpdatedAt` ON `${TABLE_NAME}` (`lastUpdatedAt`)"
+          },
+          {
+            "name": "index_notification_records_packageName_lastUpdatedAt",
+            "unique": false,
+            "columnNames": [
+              "packageName",
+              "lastUpdatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_records_packageName_lastUpdatedAt` ON `${TABLE_NAME}` (`packageName`, `lastUpdatedAt`)"
+          },
+          {
+            "name": "index_notification_records_category_lastUpdatedAt",
+            "unique": false,
+            "columnNames": [
+              "category",
+              "lastUpdatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_records_category_lastUpdatedAt` ON `${TABLE_NAME}` (`category`, `lastUpdatedAt`)"
+          },
+          {
+            "name": "index_notification_records_conversationId_lastUpdatedAt",
+            "unique": false,
+            "columnNames": [
+              "conversationId",
+              "lastUpdatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_records_conversationId_lastUpdatedAt` ON `${TABLE_NAME}` (`conversationId`, `lastUpdatedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "conversations",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "conversationId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "notification_revisions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `portableId` TEXT NOT NULL, `recordId` INTEGER NOT NULL, `contentFingerprint` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `sourcePostedAt` INTEGER NOT NULL, `title` TEXT, `body` TEXT, `bigText` TEXT, `subText` TEXT, `textLines` TEXT NOT NULL, `senderName` TEXT, `conversationTitle` TEXT, `category` TEXT, `importance` INTEGER, `extrasJson` TEXT NOT NULL, `isRecovered` INTEGER NOT NULL, FOREIGN KEY(`recordId`) REFERENCES `notification_records`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portableId",
+            "columnName": "portableId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentFingerprint",
+            "columnName": "contentFingerprint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "capturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePostedAt",
+            "columnName": "sourcePostedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bigText",
+            "columnName": "bigText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "subText",
+            "columnName": "subText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "textLines",
+            "columnName": "textLines",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conversationTitle",
+            "columnName": "conversationTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "importance",
+            "columnName": "importance",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "extrasJson",
+            "columnName": "extrasJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRecovered",
+            "columnName": "isRecovered",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_revisions_portableId",
+            "unique": true,
+            "columnNames": [
+              "portableId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_notification_revisions_portableId` ON `${TABLE_NAME}` (`portableId`)"
+          },
+          {
+            "name": "index_notification_revisions_recordId_contentFingerprint",
+            "unique": false,
+            "columnNames": [
+              "recordId",
+              "contentFingerprint"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_revisions_recordId_contentFingerprint` ON `${TABLE_NAME}` (`recordId`, `contentFingerprint`)"
+          },
+          {
+            "name": "index_notification_revisions_recordId_capturedAt",
+            "unique": false,
+            "columnNames": [
+              "recordId",
+              "capturedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_revisions_recordId_capturedAt` ON `${TABLE_NAME}` (`recordId`, `capturedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "notification_records",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `portableId` TEXT NOT NULL, `conversationId` INTEGER NOT NULL, `recordId` INTEGER NOT NULL, `revisionId` INTEGER, `messageFingerprint` TEXT NOT NULL, `senderKey` TEXT, `senderName` TEXT, `text` TEXT, `sourceTimestamp` INTEGER NOT NULL, `capturedAt` INTEGER NOT NULL, `dataMimeType` TEXT, `dataUri` TEXT, `isHistoric` INTEGER NOT NULL, FOREIGN KEY(`conversationId`) REFERENCES `conversations`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recordId`) REFERENCES `notification_records`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`revisionId`) REFERENCES `notification_revisions`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portableId",
+            "columnName": "portableId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conversationId",
+            "columnName": "conversationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revisionId",
+            "columnName": "revisionId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "messageFingerprint",
+            "columnName": "messageFingerprint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderKey",
+            "columnName": "senderKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceTimestamp",
+            "columnName": "sourceTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "capturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataMimeType",
+            "columnName": "dataMimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dataUri",
+            "columnName": "dataUri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isHistoric",
+            "columnName": "isHistoric",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_messages_portableId",
+            "unique": true,
+            "columnNames": [
+              "portableId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_chat_messages_portableId` ON `${TABLE_NAME}` (`portableId`)"
+          },
+          {
+            "name": "index_chat_messages_conversationId_messageFingerprint",
+            "unique": true,
+            "columnNames": [
+              "conversationId",
+              "messageFingerprint"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_chat_messages_conversationId_messageFingerprint` ON `${TABLE_NAME}` (`conversationId`, `messageFingerprint`)"
+          },
+          {
+            "name": "index_chat_messages_conversationId_sourceTimestamp",
+            "unique": false,
+            "columnNames": [
+              "conversationId",
+              "sourceTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_conversationId_sourceTimestamp` ON `${TABLE_NAME}` (`conversationId`, `sourceTimestamp`)"
+          },
+          {
+            "name": "index_chat_messages_recordId",
+            "unique": false,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          },
+          {
+            "name": "index_chat_messages_revisionId",
+            "unique": false,
+            "columnNames": [
+              "revisionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_revisionId` ON `${TABLE_NAME}` (`revisionId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "conversations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "conversationId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "notification_records",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "notification_revisions",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "revisionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "active_notifications",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`systemKey` TEXT NOT NULL, `recordId` INTEGER NOT NULL, `lastContentFingerprint` TEXT NOT NULL, `lastSeenAt` INTEGER NOT NULL, PRIMARY KEY(`systemKey`), FOREIGN KEY(`recordId`) REFERENCES `notification_records`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "systemKey",
+            "columnName": "systemKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastContentFingerprint",
+            "columnName": "lastContentFingerprint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenAt",
+            "columnName": "lastSeenAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "systemKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_active_notifications_recordId",
+            "unique": true,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_active_notifications_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "notification_records",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "notification_records_fts",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`appLabel` TEXT NOT NULL, `title` TEXT NOT NULL, `body` TEXT NOT NULL, `bigText` TEXT NOT NULL, `senderName` TEXT NOT NULL, `conversationTitle` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "appLabel",
+            "columnName": "appLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bigText",
+            "columnName": "bigText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conversationTitle",
+            "columnName": "conversationTitle",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "rowid"
+          ]
+        },
+        "ftsVersion": "FTS4",
+        "ftsOptions": {
+          "tokenizer": "simple",
+          "tokenizerArgs": [],
+          "contentTable": "",
+          "languageIdColumnName": "",
+          "matchInfo": "FTS4",
+          "notIndexedColumns": [],
+          "prefixSizes": [],
+          "preferredOrder": "ASC"
+        },
+        "contentSyncTriggers": []
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7cb796e73edb93ee43c4d2e8df0d938e')"
+    ]
+  }
+}

@@ -1,10 +1,13 @@
 package dev.d3v.notificationsaver
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -20,39 +23,46 @@ class MainActivityTest {
     fun onboardingDismissal_revealsRootTabs() {
         dismissOnboardingIfNeeded()
 
-        assertTextPresent("Timeline")
-        assertTextPresent("Threads")
-        assertTextPresent("Priority")
+        assertTextPresent("Home")
+        assertTextPresent("Chats")
         assertTextPresent("Settings")
     }
 
     @Test
-    fun timelineFilters_openFromToolbarButton() {
+    fun inboxFilters_openFromToolbarButton() {
         dismissOnboardingIfNeeded()
 
-        composeRule.onNodeWithText("Filters").performClick()
+        composeRule.onNodeWithContentDescription("Filters").performClick()
         composeRule.waitForIdle()
         assertTextPresent("Date range")
-        assertTextPresent("Done")
+        assertTextPresent("All time")
     }
 
     @Test
     fun settingsScreen_exposesAdvancedEntryPoint() {
         dismissOnboardingIfNeeded()
 
-        composeRule.onAllNodesWithText("Settings", useUnmergedTree = true).onLast().performClick()
-        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Appearance"))
         assertTextPresent("Appearance")
-        assertTextPresent("Advanced")
-        assertTextPresent("Show")
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Advanced and support"))
+        composeRule.onNodeWithText("Advanced and support").performClick()
+        assertTextPresent("Capture health")
     }
 
     private fun dismissOnboardingIfNeeded() {
-        composeRule.waitForIdle()
-        if (composeRule.onAllNodesWithText("Continue", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onNodeWithText("Continue", useUnmergedTree = true).performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            hasTextNode("Home") || hasTextNode("Your notifications, saved privately")
         }
+        if (hasTextNode("Your notifications, saved privately")) {
+            composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Continue without access"))
+            composeRule.onNodeWithText("Continue without access").performClick()
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) { hasTextNode("Home") }
     }
+
+    private fun hasTextNode(text: String): Boolean =
+        composeRule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     private fun assertTextPresent(text: String) {
         assertTrue(

@@ -1,58 +1,103 @@
 package dev.d3v.notificationsaver
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import android.text.format.DateUtils
+import android.view.View
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.background
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,693 +105,876 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import kotlinx.serialization.Serializable
+import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+@Serializable
+private sealed interface AppRoute : NavKey
+
+@Serializable
+private data object InboxRoute : AppRoute
+
+@Serializable
+private data object ChatsRoute : AppRoute
+
+@Serializable
+private data object SettingsRoute : AppRoute
+
+@Serializable
+private data object CaptureSettingsRoute : AppRoute
+
+@Serializable
+private data object PrivacySettingsRoute : AppRoute
+
+@Serializable
+private data object StorageSettingsRoute : AppRoute
+
+@Serializable
+private data object BackupSettingsRoute : AppRoute
+
+@Serializable
+private data object AdvancedSettingsRoute : AppRoute
+
+@Serializable
+private data object AboutSettingsRoute : AppRoute
+
+@Serializable
+private data class RecordRoute(val id: Long) : AppRoute
+
+@Serializable
+private data class ConversationRoute(val id: Long) : AppRoute
+
+class MainActivity : FragmentActivity() {
     private val mainViewModel: MainViewModel by viewModels()
+    private var appUnlocked by mutableStateOf(false)
+    private var backgroundedAt: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            NotificationSaverRoot(mainViewModel)
+            NotificationSaverRoot(
+                viewModel = mainViewModel,
+                appUnlocked = appUnlocked,
+                onUnlock = ::authenticate,
+                onLock = { appUnlocked = false },
+            )
         }
     }
 
     override fun onResume() {
         super.onResume()
         mainViewModel.setNotificationAccessGranted(hasNotificationListenerAccess(this))
+        mainViewModel.refreshHomeSummary()
+        val app = application as NotificationSaverApp
+        val settings = app.settingsStore.current()
+        if (!settings.appLockEnabled) {
+            appUnlocked = true
+        } else if (backgroundedAt > 0L) {
+            val timeout = settings.appLockTimeoutMinutes * 60_000L
+            if (settings.appLockTimeoutMinutes == 0 || System.currentTimeMillis() - backgroundedAt >= timeout) {
+                appUnlocked = false
+            }
+        }
     }
-}
 
-@Composable
-private fun NotificationSaverRoot(viewModel: MainViewModel = viewModel()) {
-    val settings by viewModel.settings.collectAsState()
-    NotificationSaverTheme(themeMode = settings.themeMode) {
-        NotificationSaverScreen(
-            viewModel = viewModel,
-            settings = settings,
+    override fun onStop() {
+        backgroundedAt = System.currentTimeMillis()
+        super.onStop()
+    }
+
+    private fun authenticate() {
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    appUnlocked = true
+                }
+            },
+        )
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle(getString(R.string.unlock_title))
+                .setSubtitle(getString(R.string.unlock_subtitle))
+                .setAllowedAuthenticators(authenticators)
+                .build(),
         )
     }
 }
 
 @Composable
-private fun NotificationSaverScreen(
+private fun NotificationSaverRoot(
     viewModel: MainViewModel,
-    settings: AppSettings,
+    appUnlocked: Boolean,
+    onUnlock: () -> Unit,
+    onLock: () -> Unit,
 ) {
-    val currentTab by viewModel.currentRootTab.collectAsState()
-    val notifications by viewModel.notifications.collectAsState()
-    val appSources by viewModel.appSources.collectAsState()
-    val categories by viewModel.categories.collectAsState()
-    val activeMessagingThreadTabs by viewModel.activeMessagingThreadTabs.collectAsState()
-    val pinnedThreads by viewModel.pinnedThreads.collectAsState()
-    val suggestedThreads by viewModel.suggestedThreads.collectAsState()
-    val selectedPackage by viewModel.currentSelectedPackage.collectAsState()
-    val selectedCategory by viewModel.currentSelectedCategory.collectAsState()
-    val selectedDateWindow by viewModel.currentDateWindow.collectAsState()
-    val searchText by viewModel.currentSearchText.collectAsState()
-    val selectedNotification by viewModel.selectedNotification.collectAsState()
-    val selectedMessagingThreadTab by viewModel.currentSelectedMessagingThreadTab.collectAsState()
-    val selectedThread by viewModel.currentThreadSelection.collectAsState()
-    val visibleMessagingThreads by viewModel.visibleMessagingThreads.collectAsState()
-    val selectedThreadSummary by viewModel.selectedThreadSummary.collectAsState()
-    val selectedThreadNotifications by viewModel.selectedThreadNotifications.collectAsState()
-    val exportRequest by viewModel.pendingExportRequest.collectAsState()
-    val diagnosticsExportRequest by viewModel.pendingDiagnosticsExportRequest.collectAsState()
-    val notificationAccessGranted by viewModel.isNotificationAccessGranted.collectAsState()
-    val storageBuckets by viewModel.storageBuckets.collectAsState()
-    val operationalSnapshot by viewModel.operationalSnapshot.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val settingsInitialized by viewModel.settingsInitialized.collectAsStateWithLifecycle()
+    val activity = requireNotNull(LocalActivity.current)
+    LaunchedEffect(settings.blockScreenshots, settings.hideRecentsPreview) {
+        applyWindowPrivacy(activity, settings)
+    }
+    NotificationSaverTheme(themeMode = settings.themeMode) {
+        LaunchedEffect(settingsInitialized, settings.appLockEnabled) {
+            if (settingsInitialized && settings.appLockEnabled) onLock()
+        }
+        if (!settingsInitialized) {
+            Surface(Modifier.fillMaxSize()) {
+                Box(contentAlignment = Alignment.Center) { Text(stringResource(R.string.loading)) }
+            }
+        } else if (settings.appLockEnabled && !appUnlocked) {
+            LockedScreen(onUnlock)
+        } else if (!settings.onboardingCompleted) {
+            OnboardingScreen(
+                onOpenAccess = { openNotificationListenerSettings(activity) },
+                onContinue = viewModel::dismissOnboarding,
+            )
+        } else {
+            AppNavigation(viewModel, settings)
+        }
+    }
+}
 
+@Composable
+private fun LockedScreen(onUnlock: () -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(56.dp))
+            Spacer(Modifier.height(20.dp))
+            Text(stringResource(R.string.app_locked), style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.app_locked_description),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onUnlock) { Text(stringResource(R.string.unlock)) }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingScreen(onOpenAccess: () -> Unit, onContinue: () -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(48.dp))
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    stringResource(R.string.onboarding_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.onboarding_summary), style = MaterialTheme.typography.bodyLarge)
+            }
+            item {
+                DisclosureCard(
+                    icon = Icons.Default.Notifications,
+                    titleRes = R.string.onboarding_capture_title,
+                    bodyRes = R.string.onboarding_capture_body_compact,
+                )
+            }
+            item {
+                DisclosureCard(
+                    icon = Icons.Default.Shield,
+                    titleRes = R.string.onboarding_private_title,
+                    bodyRes = R.string.onboarding_private_body_compact,
+                )
+            }
+            item {
+                Button(onClick = onOpenAccess, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Notifications, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.open_notification_access))
+                }
+                TextButton(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.continue_to_app))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DisclosureCard(icon: ImageVector, titleRes: Int, bodyRes: Int) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = CircleShape,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(titleRes), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(bodyRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppNavigation(viewModel: MainViewModel, settings: AppSettings) {
+    val backStack = rememberNavBackStack(InboxRoute)
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-    var confirmFilteredDelete by rememberSaveable { mutableStateOf(false) }
-    var confirmClearAll by rememberSaveable { mutableStateOf(false) }
-    var confirmSingleDelete by rememberSaveable { mutableStateOf(false) }
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri ->
-        viewModel.handleExportResult(uri)
-    }
-    val diagnosticsExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip"),
-    ) { uri ->
-        viewModel.handleDiagnosticsExportResult(uri)
-    }
+    val exportRequest by viewModel.pendingExportRequest.collectAsStateWithLifecycle()
+    val importRequest by viewModel.pendingImportRequest.collectAsStateWithLifecycle()
+    val jsonLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json"), viewModel::handleExportResult)
+    val zipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip"), viewModel::handleExportResult)
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream"), viewModel::handleExportResult)
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), viewModel::handleImportResult)
 
     LaunchedEffect(Unit) {
-        viewModel.snackbarMessages.collect { message ->
-            snackbarHostState.showSnackbar(message)
-        }
+        viewModel.messages.collect(snackbarHostState::showSnackbar)
     }
-
     LaunchedEffect(exportRequest) {
-        val pending = exportRequest ?: return@LaunchedEffect
-        exportLauncher.launch(pending.filename)
-        viewModel.markExportRequestConsumed()
+        val request = exportRequest ?: return@LaunchedEffect
+        when (request.kind) {
+            ExportKind.EncryptedBackup -> backupLauncher.launch(request.filename)
+            ExportKind.ReadableJson -> jsonLauncher.launch(request.filename)
+            ExportKind.Diagnostics -> zipLauncher.launch(request.filename)
+        }
+    }
+    LaunchedEffect(importRequest) {
+        if (importRequest != null) {
+            importLauncher.launch(arrayOf("application/octet-stream", "application/json", "*/*"))
+        }
     }
 
-    LaunchedEffect(diagnosticsExportRequest) {
-        val pending = diagnosticsExportRequest ?: return@LaunchedEffect
-        diagnosticsExportLauncher.launch(pending.filename)
-        viewModel.markDiagnosticsExportRequestConsumed()
-    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val expanded = maxWidth >= 840.dp
+        val topLevel = backStack.firstOrNull().toRootDestination()
+        val showPrimaryNavigation = backStack.size == 1
 
-    BackHandler(enabled = selectedNotification != null || selectedThread != null) {
-        viewModel.goBack()
-    }
-
-    if (!settings.onboardingCompleted) {
-        OnboardingDialog(
-            onDismiss = viewModel::dismissOnboarding,
-            onOpenSettings = { openNotificationListenerSettings(context) },
-        )
-    }
-
-    if (confirmFilteredDelete) {
-        ConfirmDialog(
-            title = "Delete filtered notifications?",
-            message = "This removes notifications matching the current app and date filters.",
-            confirmLabel = "Delete",
-            onConfirm = {
-                confirmFilteredDelete = false
-                viewModel.deleteCurrentFilterSet()
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                if (!expanded && showPrimaryNavigation) {
+                    NavigationBar {
+                        RootDestination.entries.forEach { destination ->
+                            NavigationBarItem(
+                                selected = topLevel == destination,
+                                onClick = {
+                                    backStack.clear()
+                                    backStack.add(destination.route())
+                                    viewModel.closeRecord()
+                                    viewModel.closeConversation()
+                                },
+                                icon = { DestinationIcon(destination, selected = topLevel == destination) },
+                                label = { Text(destination.label()) },
+                            )
+                        }
+                    }
+                }
             },
-            onDismiss = { confirmFilteredDelete = false },
-        )
-    }
-
-    if (confirmClearAll) {
-        ConfirmDialog(
-            title = "Clear all app data?",
-            message = "This deletes saved notifications, logs, crash reports, cache, and resets app settings.",
-            confirmLabel = "Clear all",
-            onConfirm = {
-                confirmClearAll = false
-                viewModel.clearAllData()
-            },
-            onDismiss = { confirmClearAll = false },
-        )
-    }
-
-    if (confirmSingleDelete) {
-        ConfirmDialog(
-            title = "Delete this notification?",
-            message = "This removes only the selected saved notification.",
-            confirmLabel = "Delete",
-            onConfirm = {
-                confirmSingleDelete = false
-                viewModel.deleteSelectedNotification()
-            },
-            onDismiss = { confirmSingleDelete = false },
-        )
-    }
-
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
-        },
-        topBar = {
-            AppTopBar(
-                currentTab = currentTab,
-                selectedNotification = selectedNotification,
-                selectedMessagingThreadTab = selectedMessagingThreadTab,
-                selectedThread = selectedThread,
-                selectedThreadSummary = selectedThreadSummary,
-                onBack = viewModel::goBack,
-            )
-        },
-        bottomBar = {
-            if (selectedNotification == null && selectedThread == null) {
-                PrimaryTabRow(
-                    selectedTabIndex = currentTab.ordinal,
-                    modifier = Modifier.navigationBarsPadding(),
-                ) {
-                    RootTab.entries.forEach { tab ->
-                        Tab(
-                            selected = currentTab == tab,
-                            onClick = { viewModel.selectRootTab(tab) },
-                            text = { Text(tab.label) },
-                        )
+        ) { padding ->
+            Row(Modifier.fillMaxSize().padding(padding)) {
+                if (expanded && showPrimaryNavigation) {
+                    NavigationRail {
+                        Spacer(Modifier.height(12.dp))
+                        RootDestination.entries.forEach { destination ->
+                            NavigationRailItem(
+                                selected = topLevel == destination,
+                                onClick = {
+                                    backStack.clear()
+                                    backStack.add(destination.route())
+                                    viewModel.closeRecord()
+                                    viewModel.closeConversation()
+                                },
+                                icon = { DestinationIcon(destination, selected = topLevel == destination) },
+                                label = { Text(destination.label()) },
+                            )
+                        }
                     }
                 }
-            }
-        },
-    ) { padding ->
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            when {
-                selectedThread != null -> {
-                    selectedThread?.let { currentThread ->
-                        ThreadScreen(
-                            selection = currentThread,
-                            thread = selectedThreadSummary,
-                            notifications = selectedThreadNotifications,
-                            onRenameThread = viewModel::renameCurrentThread,
-                            onTogglePinned = {
-                                selectedThreadSummary?.let(viewModel::toggleThreadPinned)
-                            },
-                        )
-                    }
-                }
-
-                selectedNotification != null -> {
-                    selectedNotification?.let { detail ->
-                        NotificationDetailScreen(
-                            notification = detail,
-                            onSave = viewModel::saveNotificationMetadata,
-                            onDelete = { confirmSingleDelete = true },
-                            onOpenThread = { viewModel.openThread(detail) },
-                        )
-                    }
-                }
-
-                currentTab == RootTab.Settings -> {
-                    SettingsScreen(
-                        settings = settings,
-                        storageBuckets = storageBuckets,
-                        operationalSnapshot = operationalSnapshot,
-                        appSources = appSources,
-                        notificationAccessGranted = notificationAccessGranted,
-                        onOpenNotificationAccess = { openNotificationListenerSettings(context) },
-                        onHidePreviewsChanged = viewModel::setHideNotificationPreviews,
-                        onRetentionSelected = viewModel::setRetentionDays,
-                        onFallbackCategoryChanged = viewModel::setFallbackCategory,
-                        onThemeModeChanged = viewModel::setThemeMode,
-                        onSaveAppCategoryOverride = viewModel::saveAppCategoryOverride,
-                        onRemoveAppCategoryOverride = viewModel::removeAppCategoryOverride,
-                        onRefreshStorage = viewModel::refreshStorageUsage,
-                        onRequestExport = viewModel::requestExport,
-                        onRequestDiagnosticsExport = viewModel::requestDiagnosticsExport,
-                        onClearLogs = viewModel::clearLogs,
-                        onClearCrashReports = viewModel::clearCrashReports,
-                        onLoadDemoData = viewModel::loadDemoData,
-                        onClearAll = { confirmClearAll = true },
-                    )
-                }
-
-                currentTab == RootTab.Threads -> {
-                    MessagingThreadsScreen(
-                        activeTabs = activeMessagingThreadTabs,
-                        selectedTab = selectedMessagingThreadTab,
-                        threads = visibleMessagingThreads,
-                        hidePreviews = settings.hideNotificationPreviews,
-                        onSelectTab = viewModel::selectMessagingThreadTab,
-                        onOpenThread = { viewModel.openThread(it) },
-                        onTogglePinned = viewModel::toggleThreadPinned,
-                    )
-                }
-
-                currentTab == RootTab.Priority -> {
-                    PriorityScreen(
-                        pinnedThreads = pinnedThreads,
-                        suggestedThreads = suggestedThreads,
-                        hidePreviews = settings.hideNotificationPreviews,
-                        onOpenThread = { viewModel.openThread(it) },
-                        onTogglePinned = viewModel::toggleThreadPinned,
-                    )
-                }
-
-                else -> {
-                    TimelineScreen(
-                        notificationAccessGranted = notificationAccessGranted,
-                        notifications = notifications,
-                        appSources = appSources,
-                        categories = categories,
-                        searchText = searchText,
-                        selectedPackage = selectedPackage,
-                        selectedCategory = selectedCategory,
-                        selectedDateWindow = selectedDateWindow,
-                        hideNotificationPreviews = settings.hideNotificationPreviews,
-                        onOpenNotificationAccess = { openNotificationListenerSettings(context) },
-                        onSearchChanged = viewModel::updateSearchText,
-                        onPackageChanged = viewModel::updateSelectedPackage,
-                        onCategoryChanged = viewModel::updateSelectedCategory,
-                        onDateWindowChanged = viewModel::updateDateWindow,
-                        onOpenNotification = { viewModel.openNotificationDetail(it.id) },
-                        onDeleteFiltered = { confirmFilteredDelete = true },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppTopBar(
-    currentTab: RootTab,
-    selectedNotification: NotificationEntity?,
-    selectedMessagingThreadTab: MessagingThreadTab?,
-    selectedThread: ThreadSelection?,
-    selectedThreadSummary: ThreadSummary?,
-    onBack: () -> Unit,
-) {
-    val isDetailScreen = selectedNotification != null || selectedThread != null
-    val title = when {
-        selectedThread != null -> selectedThreadSummary?.displayTitle ?: selectedThread.resolvedThreadId
-        selectedNotification != null -> "Notification"
-        currentTab == RootTab.Timeline -> "Timeline"
-        currentTab == RootTab.Threads -> "Threads"
-        currentTab == RootTab.Priority -> "Priority"
-        currentTab == RootTab.Settings -> "Settings"
-        else -> "Timeline"
-    }
-    val subtitle = when {
-        selectedThread != null -> selectedThreadSummary?.packageName ?: selectedThread.packageName
-        selectedNotification != null -> selectedNotification.appLabel
-        currentTab == RootTab.Timeline -> "Search and revisit saved notifications"
-        currentTab == RootTab.Threads -> selectedMessagingThreadTab?.label ?: "Supported messaging apps"
-        currentTab == RootTab.Priority -> "Pinned and suggested conversations"
-        currentTab == RootTab.Settings -> "Basic settings with advanced tools tucked away"
-        else -> "Search and revisit saved notifications"
-    }
-
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = if (isDetailScreen) 12.dp else 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (isDetailScreen) {
-                    TextButton(onClick = onBack) {
-                        Text("Back")
-                    }
-                }
-                Column {
-                    Text(
-                        text = title,
-                        style = if (isDetailScreen) {
-                            MaterialTheme.typography.titleLarge
-                        } else {
-                            MaterialTheme.typography.headlineSmall
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-        }
-    }
-}
-
-@Composable
-private fun OnboardingDialog(
-    onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = {},
-        title = { Text("How this app works") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("1. Grant notification listener access.")
-                Text("2. The app saves incoming notifications locally on your device.")
-                Text("3. You can browse, pin, export, and delete saved history from the UI.")
-            }
-        },
-        confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("Continue")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onOpenSettings) {
-                Text("Open access settings")
-            }
-        },
-    )
-}
-
-@Composable
-private fun ConfirmDialog(
-    title: String,
-    message: String,
-    confirmLabel: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(message) },
-        confirmButton = {
-            Button(onClick = onConfirm) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun TimelineScreen(
-    notificationAccessGranted: Boolean,
-    notifications: List<NotificationEntity>,
-    appSources: List<AppSource>,
-    categories: List<String>,
-    searchText: String,
-    selectedPackage: String?,
-    selectedCategory: String?,
-    selectedDateWindow: DateWindow,
-    hideNotificationPreviews: Boolean,
-    onOpenNotificationAccess: () -> Unit,
-    onSearchChanged: (String) -> Unit,
-    onPackageChanged: (String?) -> Unit,
-    onCategoryChanged: (String?) -> Unit,
-    onDateWindowChanged: (DateWindow) -> Unit,
-    onOpenNotification: (NotificationEntity) -> Unit,
-    onDeleteFiltered: () -> Unit,
-) {
-    val deleteScopeActive = selectedPackage != null || selectedDateWindow != DateWindow.AllTime
-    val appFilterLabel = appSources.firstOrNull { it.packageName == selectedPackage }?.appLabel ?: "All apps"
-    val categoryFilterLabel = selectedCategory ?: "All categories"
-    var showFilters by rememberSaveable { mutableStateOf(false) }
-
-    if (showFilters) {
-        ModalBottomSheet(
-            onDismissRequest = { showFilters = false },
-        ) {
-            TimelineFilterSheet(
-                appSources = appSources,
-                categories = categories,
-                selectedPackage = selectedPackage,
-                selectedCategory = selectedCategory,
-                selectedDateWindow = selectedDateWindow,
-                deleteScopeActive = deleteScopeActive,
-                onPackageChanged = onPackageChanged,
-                onCategoryChanged = onCategoryChanged,
-                onDateWindowChanged = onDateWindowChanged,
-                onDeleteFiltered = {
-                    showFilters = false
-                    onDeleteFiltered()
-                },
-                onDismiss = { showFilters = false },
-            )
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            NotificationAccessStatus(
-                notificationAccessGranted = notificationAccessGranted,
-                onOpenNotificationAccess = onOpenNotificationAccess,
-            )
-        }
-        item {
-            SectionBlock {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = searchText,
-                        onValueChange = onSearchChanged,
-                        label = { Text("Search title or body") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                    )
-                    OutlinedButton(onClick = { showFilters = true }) {
-                        Text("Filters")
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterSummaryPill(
-                        text = appFilterLabel,
-                        emphasized = selectedPackage != null,
-                    )
-                    FilterSummaryPill(
-                        text = categoryFilterLabel,
-                        emphasized = selectedCategory != null,
-                    )
-                    FilterSummaryPill(
-                        text = selectedDateWindow.label,
-                        emphasized = selectedDateWindow != DateWindow.AllTime,
-                    )
-                }
-            }
-        }
-
-        if (notifications.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "No saved notifications yet",
-                    message = if (notificationAccessGranted) {
-                        "New notifications will appear here after they are captured."
-                    } else {
-                        "Grant notification access first, then incoming notifications can be saved."
+                NavDisplay(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    backStack = backStack,
+                    onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                        viewModel.closeRecord()
+                        viewModel.closeConversation()
+                    },
+                    entryProvider = entryProvider {
+                        entry<InboxRoute> {
+                            InboxScreen(
+                                viewModel = viewModel,
+                                settings = settings,
+                                expanded = expanded,
+                                onOpenRecord = { id ->
+                                    viewModel.openRecord(id)
+                                    if (!expanded) backStack.add(RecordRoute(id))
+                                },
+                            )
+                        }
+                        entry<ChatsRoute> {
+                            ChatsScreen(
+                                viewModel = viewModel,
+                                settings = settings,
+                                expanded = expanded,
+                                onOpenConversation = { id ->
+                                    viewModel.openConversation(id)
+                                    if (!expanded) backStack.add(ConversationRoute(id))
+                                },
+                            )
+                        }
+                        entry<SettingsRoute> {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                settings = settings,
+                                onOpenCapture = { backStack.add(CaptureSettingsRoute) },
+                                onOpenPrivacy = { backStack.add(PrivacySettingsRoute) },
+                                onOpenStorage = { backStack.add(StorageSettingsRoute) },
+                                onOpenBackup = { backStack.add(BackupSettingsRoute) },
+                                onOpenAdvanced = { backStack.add(AdvancedSettingsRoute) },
+                                onOpenAbout = { backStack.add(AboutSettingsRoute) },
+                            )
+                        }
+                        entry<CaptureSettingsRoute> {
+                            CaptureSettingsScreen(viewModel, settings, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<PrivacySettingsRoute> {
+                            PrivacySettingsScreen(viewModel, settings, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<StorageSettingsRoute> {
+                            StorageSettingsScreen(viewModel, settings, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<BackupSettingsRoute> {
+                            BackupSettingsScreen(viewModel, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<AdvancedSettingsRoute> {
+                            AdvancedSettingsScreen(viewModel, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<AboutSettingsRoute> {
+                            AboutSettingsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<RecordRoute> { route ->
+                            LaunchedEffect(route.id) { viewModel.openRecord(route.id) }
+                            RecordDetailScreen(viewModel, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
+                        entry<ConversationRoute> { route ->
+                            LaunchedEffect(route.id) { viewModel.openConversation(route.id) }
+                            ConversationDetailScreen(viewModel, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        }
                     },
                 )
             }
-        } else {
-            item {
-                Text(
-                    text = "${notifications.size} saved notifications",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            items(
-                items = notifications,
-                key = { it.id },
-            ) { notification ->
-                NotificationCard(
-                    notification = notification,
-                    hideContent = hideNotificationPreviews,
-                    onClick = { onOpenNotification(notification) },
-                )
+        }
+    }
+}
+
+@Composable
+private fun DestinationIcon(destination: RootDestination, selected: Boolean) {
+    Icon(
+        imageVector = when (destination) {
+            RootDestination.Home -> if (selected) Icons.Default.Home else Icons.Outlined.Home
+            RootDestination.Chats -> if (selected) Icons.AutoMirrored.Filled.Chat else Icons.AutoMirrored.Outlined.Chat
+            RootDestination.Settings -> if (selected) Icons.Default.Settings else Icons.Outlined.Settings
+        },
+        contentDescription = null,
+    )
+}
+
+@Composable
+private fun RootDestination.label(): String = when (this) {
+    RootDestination.Home -> stringResource(R.string.home)
+    RootDestination.Chats -> stringResource(R.string.chats)
+    RootDestination.Settings -> stringResource(R.string.settings)
+}
+
+private fun RootDestination.route(): AppRoute = when (this) {
+    RootDestination.Home -> InboxRoute
+    RootDestination.Chats -> ChatsRoute
+    RootDestination.Settings -> SettingsRoute
+}
+
+private fun NavKey?.toRootDestination(): RootDestination = when (this) {
+    ChatsRoute -> RootDestination.Chats
+    SettingsRoute -> RootDestination.Settings
+    else -> RootDestination.Home
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InboxScreen(
+    viewModel: MainViewModel,
+    settings: AppSettings,
+    expanded: Boolean,
+    onOpenRecord: (Long) -> Unit,
+) {
+    val context = LocalContext.current
+    val records = viewModel.records.collectAsLazyPagingItems()
+    val accessGranted by viewModel.isNotificationAccessGranted.collectAsStateWithLifecycle()
+    val search by viewModel.currentSearchText.collectAsStateWithLifecycle()
+    val selectedPackage by viewModel.currentSelectedPackage.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.currentSelectedCategory.collectAsStateWithLifecycle()
+    val selectedDate by viewModel.currentDateWindow.collectAsStateWithLifecycle()
+    val appSources by viewModel.appSources.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val summary by viewModel.homeSummary.collectAsStateWithLifecycle()
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+
+    if (showFilters) {
+        ModalBottomSheet(onDismissRequest = { showFilters = false }) {
+            FilterSheet(
+                appSources,
+                categories,
+                selectedPackage,
+                selectedCategory,
+                selectedDate,
+                viewModel::updateSelectedPackage,
+                viewModel::updateSelectedCategory,
+                viewModel::updateDateWindow,
+                onClear = {
+                    viewModel.updateSelectedPackage(null)
+                    viewModel.updateSelectedCategory(null)
+                    viewModel.updateDateWindow(DateWindow.AllTime)
+                },
+                onDelete = { showFilters = false; confirmDelete = true },
+            )
+        }
+    }
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(R.string.delete_matching_title),
+            message = stringResource(R.string.delete_matching_body),
+            confirmLabel = stringResource(R.string.delete),
+            onConfirm = { confirmDelete = false; viewModel.deleteCurrentFilterSet() },
+            onDismiss = { confirmDelete = false },
+        )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.home)) })
+        Row(Modifier.fillMaxSize()) {
+            InboxList(
+                modifier = if (expanded) Modifier.weight(0.45f) else Modifier.fillMaxSize(),
+                records = records,
+                accessGranted = accessGranted,
+                summary = summary,
+                search = search,
+                selectedPackage = selectedPackage,
+                selectedCategory = selectedCategory,
+                selectedDate = selectedDate,
+                hidePreviews = settings.hideNotificationPreviews,
+                onSearch = viewModel::updateSearchText,
+                onDate = viewModel::updateDateWindow,
+                onClearFilters = {
+                    viewModel.updateSelectedPackage(null)
+                    viewModel.updateSelectedCategory(null)
+                    viewModel.updateDateWindow(DateWindow.AllTime)
+                },
+                onFilters = { showFilters = true },
+                onOpenAccess = { openNotificationListenerSettings(context) },
+                onOpenRecord = onOpenRecord,
+            )
+            if (expanded) {
+                VerticalDivider(Modifier.fillMaxHeight())
+                Box(Modifier.weight(0.55f).fillMaxHeight()) {
+                    val record by viewModel.selectedRecord.collectAsStateWithLifecycle()
+                    if (record == null) {
+                        SelectionHint(Icons.Default.Archive, R.string.select_notification)
+                    } else {
+                        RecordDetailContent(viewModel)
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun InboxList(
+    modifier: Modifier,
+    records: LazyPagingItems<NotificationRecordEntity>,
+    accessGranted: Boolean,
+    summary: HomeSummary,
+    search: String,
+    selectedPackage: String?,
+    selectedCategory: String?,
+    selectedDate: DateWindow,
+    hidePreviews: Boolean,
+    onSearch: (String) -> Unit,
+    onDate: (DateWindow) -> Unit,
+    onClearFilters: () -> Unit,
+    onFilters: () -> Unit,
+    onOpenAccess: () -> Unit,
+    onOpenRecord: (Long) -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item { HomeSummaryCard(summary, accessGranted, onOpenAccess) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(stringResource(R.string.archive))
+                Spacer(Modifier.weight(1f))
+                val activeFilterCount = listOfNotNull(selectedPackage, selectedCategory).size +
+                    if (selectedDate == DateWindow.AllTime) 0 else 1
+                if (activeFilterCount > 0) {
+                    TextButton(onClick = onClearFilters) {
+                        Text(stringResource(R.string.clear))
+                    }
+                }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = onSearch,
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.search_notifications)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                )
+                IconButton(onClick = onFilters) {
+                    val activeFilterCount = listOfNotNull(selectedPackage, selectedCategory).size +
+                        if (selectedDate == DateWindow.AllTime) 0 else 1
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = stringResource(
+                            if (activeFilterCount == 0) R.string.filters else R.string.filters_active,
+                            activeFilterCount,
+                        ),
+                    )
+                }
+            }
+        }
+        item {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(DateWindow.Today, DateWindow.Last7Days, DateWindow.AllTime).forEach { window ->
+                    FilterChip(
+                        selected = selectedDate == window,
+                        onClick = { onDate(window) },
+                        label = { Text(window.quickLabel()) },
+                    )
+                }
+            }
+        }
+        when {
+            records.loadState.refresh is LoadState.Loading -> item { LoadingState() }
+            records.loadState.refresh is LoadState.Error -> item {
+                ErrorState(onRetry = records::retry)
+            }
+            records.itemCount == 0 -> item {
+                EmptyState(Icons.Default.Archive, R.string.empty_inbox_title, R.string.empty_inbox_body)
+            }
+            else -> items(
+                count = records.itemCount,
+                key = { index -> records[index]?.id ?: "placeholder-$index" },
+                contentType = { "notification" },
+            ) { index ->
+                records[index]?.let { record ->
+                    NotificationRow(record, hidePreviews, onClick = { onOpenRecord(record.id) })
+                }
+            }
+        }
+        if (records.loadState.append is LoadState.Loading) item { LoadingState() }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeSummaryCard(
+    summary: HomeSummary,
+    accessGranted: Boolean,
+    onOpenAccess: () -> Unit,
+) {
+    Surface(
+        color = if (accessGranted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (accessGranted) Icons.Default.CheckCircle else Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = if (accessGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(if (accessGranted) R.string.capture_ready else R.string.capture_needs_attention), fontWeight = FontWeight.SemiBold)
+                    Text(
+                        stringResource(if (accessGranted) R.string.capture_ready_body else R.string.capture_needs_attention_body),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (!accessGranted) {
+                    TextButton(onClick = onOpenAccess) { Text(stringResource(R.string.manage)) }
+                }
+            }
+            if (accessGranted) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SummaryMetric(summary.savedToday.toString(), stringResource(R.string.saved_today), Modifier.weight(1f))
+                    SummaryMetric(summary.activeCount.toString(), stringResource(R.string.active_now), Modifier.weight(1f))
+                    summary.latestActivityAt?.let {
+                        val activityTime = if (System.currentTimeMillis() - it < 90_000L) {
+                            stringResource(R.string.now)
+                        } else {
+                            relativeTime(it)
+                        }
+                        SummaryMetric(activityTime, stringResource(R.string.latest_activity), Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
+}
+
+@Composable
+private fun NotificationRow(record: NotificationRecordEntity, hidePreviews: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.large,
+    ) {
+        ListItem(
+            leadingContent = { AppMonogram(record.appLabel) },
+            headlineContent = {
+                Text(record.latestTitle ?: record.appLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Column {
+                    Text(record.appLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        if (hidePreviews) stringResource(R.string.content_hidden) else record.latestBody ?: record.latestBigText ?: stringResource(R.string.no_preview),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            trailingContent = {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(relativeTime(record.lastUpdatedAt), style = MaterialTheme.typography.labelSmall)
+                    if (record.revisionCount > 1) Text(pluralStringResource(R.plurals.updates_count, record.revisionCount, record.revisionCount), style = MaterialTheme.typography.labelSmall)
+                    if (record.isActive) Text(stringResource(R.string.active), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TimelineFilterSheet(
+private fun FilterSheet(
     appSources: List<AppSource>,
     categories: List<String>,
     selectedPackage: String?,
     selectedCategory: String?,
-    selectedDateWindow: DateWindow,
-    deleteScopeActive: Boolean,
-    onPackageChanged: (String?) -> Unit,
-    onCategoryChanged: (String?) -> Unit,
-    onDateWindowChanged: (DateWindow) -> Unit,
-    onDeleteFiltered: () -> Unit,
-    onDismiss: () -> Unit,
+    selectedDate: DateWindow,
+    onPackage: (String?) -> Unit,
+    onCategory: (String?) -> Unit,
+    onDate: (DateWindow) -> Unit,
+    onClear: () -> Unit,
+    onDelete: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Filters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-
-        Text("Apps", style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selectedPackage == null,
-                onClick = { onPackageChanged(null) },
-                label = { Text("All apps") },
-            )
-            appSources.forEach { source ->
-                FilterChip(
-                    selected = selectedPackage == source.packageName,
-                    onClick = { onPackageChanged(source.packageName) },
-                    label = { Text(source.appLabel) },
-                )
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(stringResource(R.string.filters))
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    onClick = onClear,
+                    enabled = selectedPackage != null || selectedCategory != null || selectedDate != DateWindow.AllTime,
+                ) { Text(stringResource(R.string.clear_all_filters)) }
             }
         }
-
-        Text("Categories", style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selectedCategory == null,
-                onClick = { onCategoryChanged(null) },
-                label = { Text("All categories") },
-            )
-            categories.forEach { category ->
-                FilterChip(
-                    selected = selectedCategory == category,
-                    onClick = { onCategoryChanged(category) },
-                    label = { Text(category) },
-                )
+        item {
+            Text(stringResource(R.string.apps), fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selectedPackage == null, { onPackage(null) }, { Text(stringResource(R.string.all_apps)) })
+                appSources.forEach { app ->
+                    FilterChip(selectedPackage == app.packageName, { onPackage(app.packageName) }, { Text(app.appLabel) })
+                }
             }
         }
-
-        Text("Date range", style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DateWindow.entries.forEach { window ->
-                FilterChip(
-                    selected = selectedDateWindow == window,
-                    onClick = { onDateWindowChanged(window) },
-                    label = { Text(window.label) },
-                )
+        item {
+            Text(stringResource(R.string.categories), fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selectedCategory == null, { onCategory(null) }, { Text(stringResource(R.string.all_categories)) })
+                categories.forEach { category ->
+                    FilterChip(selectedCategory == category, { onCategory(category) }, { Text(category) })
+                }
             }
         }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onDismiss) {
-                Text("Done")
+        item {
+            Text(stringResource(R.string.date_range), fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DateWindow.entries.forEach { date ->
+                    FilterChip(selectedDate == date, { onDate(date) }, { Text(date.label()) })
+                }
             }
+        }
+        item {
             OutlinedButton(
-                onClick = onDeleteFiltered,
-                enabled = deleteScopeActive,
+                onClick = onDelete,
+                enabled = selectedPackage != null || selectedDate != DateWindow.AllTime,
             ) {
-                Text("Delete current scope")
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.delete_matching))
             }
+            Spacer(Modifier.height(24.dp))
         }
-        if (!deleteScopeActive) {
-            Text(
-                text = "Bulk delete only applies when an app or date window is selected.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MessagingThreadsScreen(
-    activeTabs: List<MessagingThreadTab>,
-    selectedTab: MessagingThreadTab?,
-    threads: List<ThreadSummary>,
-    hidePreviews: Boolean,
-    onSelectTab: (MessagingThreadTab) -> Unit,
-    onOpenThread: (ThreadSummary) -> Unit,
-    onTogglePinned: (ThreadSummary) -> Unit,
+private fun ChatsScreen(
+    viewModel: MainViewModel,
+    settings: AppSettings,
+    expanded: Boolean,
+    onOpenConversation: (Long) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (activeTabs.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "No messaging threads yet",
-                    message = "WhatsApp, Instagram, and Telegram conversations appear here when notifications expose conversation names, sender names, or manual thread labels.",
-                )
+    val conversations = viewModel.conversations.collectAsLazyPagingItems()
+    val search by viewModel.currentChatSearchText.collectAsStateWithLifecycle()
+    val selectedPackage by viewModel.currentChatSelectedPackage.collectAsStateWithLifecycle()
+    val appSources by viewModel.appSources.collectAsStateWithLifecycle()
+    var showAppFilter by rememberSaveable { mutableStateOf(false) }
+    if (showAppFilter) {
+        ModalBottomSheet(onDismissRequest = { showAppFilter = false }) {
+            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.all_apps)) },
+                        modifier = Modifier.clickable {
+                            viewModel.updateChatSelectedPackage(null)
+                            showAppFilter = false
+                        },
+                    )
+                }
+                items(appSources, key = AppSource::packageName) { app ->
+                    ListItem(
+                        headlineContent = { Text(app.appLabel) },
+                        supportingContent = { Text(app.packageName) },
+                        modifier = Modifier.clickable {
+                            viewModel.updateChatSelectedPackage(app.packageName)
+                            showAppFilter = false
+                        },
+                    )
+                }
             }
-        } else {
-            val currentTab = selectedTab ?: activeTabs.first()
-
-            item {
-                PrimaryTabRow(selectedTabIndex = activeTabs.indexOf(currentTab)) {
-                    activeTabs.forEach { tab ->
-                        Tab(
-                            selected = currentTab == tab,
-                            onClick = { onSelectTab(tab) },
-                            text = { Text(tab.label) },
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.chats)) })
+        Row(Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = if (expanded) Modifier.weight(0.45f) else Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = viewModel::updateChatSearchText,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.search_chats)) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { showAppFilter = true }) {
+                                Icon(Icons.Default.FilterList, stringResource(R.string.filter_chats_by_app))
+                            }
+                        },
+                    )
+                    selectedPackage?.let { packageName ->
+                        val label = appSources.firstOrNull { it.packageName == packageName }?.appLabel ?: packageName
+                        FilterChip(
+                            selected = true,
+                            onClick = { viewModel.updateChatSelectedPackage(null) },
+                            label = { Text(label) },
                         )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                when {
+                    conversations.loadState.refresh is LoadState.Loading -> item { LoadingState() }
+                    conversations.loadState.refresh is LoadState.Error -> item { ErrorState(conversations::retry) }
+                    conversations.itemCount == 0 -> item { EmptyState(Icons.AutoMirrored.Filled.Chat, R.string.empty_chats_title, R.string.empty_chats_body) }
+                    else -> items(
+                        count = conversations.itemCount,
+                        key = { index -> conversations[index]?.id ?: "chat-$index" },
+                        contentType = { "conversation" },
+                    ) { index ->
+                        conversations[index]?.let { conversation ->
+                            ConversationRow(
+                                conversation,
+                                settings.hideNotificationPreviews,
+                                onOpen = { onOpenConversation(conversation.id) },
+                                onPin = { viewModel.toggleConversationPinned(conversation) },
+                            )
+                        }
                     }
                 }
             }
-            item {
-                Text(
-                    text = "${threads.size} grouped conversations",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (threads.isEmpty()) {
-                item {
-                    EmptyState(
-                        title = "No threads in ${currentTab.label}",
-                        message = "This app currently has no grouped conversations to show.",
-                    )
-                }
-            } else {
-                items(
-                    items = threads,
-                    key = { it.stableId },
-                ) { thread ->
-                    ThreadSummaryCard(
-                        thread = thread,
-                        hidePreview = hidePreviews,
-                        onOpenThread = { onOpenThread(thread) },
-                        onTogglePinned = { onTogglePinned(thread) },
-                    )
+            if (expanded) {
+                VerticalDivider(Modifier.fillMaxHeight())
+                Box(Modifier.weight(0.55f)) {
+                    val conversation by viewModel.selectedConversation.collectAsStateWithLifecycle()
+                    if (conversation == null) SelectionHint(Icons.AutoMirrored.Filled.Chat, R.string.select_conversation) else ConversationDetailContent(viewModel)
                 }
             }
         }
@@ -754,912 +982,848 @@ private fun MessagingThreadsScreen(
 }
 
 @Composable
-private fun PriorityScreen(
-    pinnedThreads: List<ThreadSummary>,
-    suggestedThreads: List<ThreadSummary>,
+private fun ConversationRow(
+    conversation: ConversationEntity,
     hidePreviews: Boolean,
-    onOpenThread: (ThreadSummary) -> Unit,
-    onTogglePinned: (ThreadSummary) -> Unit,
+    onOpen: () -> Unit,
+    onPin: () -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            SectionHeading("Pinned")
-        }
-        if (pinnedThreads.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "No pinned threads",
-                    message = "Pin important conversations from the Threads list or from inside a thread.",
-                )
-            }
-        } else {
-            items(
-                items = pinnedThreads,
-                key = { it.stableId },
-            ) { thread ->
-                ThreadSummaryCard(
-                    thread = thread,
-                    hidePreview = hidePreviews,
-                    onOpenThread = { onOpenThread(thread) },
-                    onTogglePinned = { onTogglePinned(thread) },
-                )
-            }
-        }
-
-        item {
-            SectionHeading("Suggested")
-        }
-        if (suggestedThreads.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "No suggested threads",
-                    message = "Suggested threads appear after the app has enough recent conversation activity to rank.",
-                )
-            }
-        } else {
-            items(
-                items = suggestedThreads,
-                key = { it.stableId },
-            ) { thread ->
-                ThreadSummaryCard(
-                    thread = thread,
-                    hidePreview = hidePreviews,
-                    onOpenThread = { onOpenThread(thread) },
-                    onTogglePinned = { onTogglePinned(thread) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationCard(
-    notification: NotificationEntity,
-    hideContent: Boolean,
-    onClick: () -> Unit,
-) {
-    val preview = buildNotificationPreview(notification, hideContent)
-
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = if (notification.isRemoved) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = MaterialTheme.shapes.large,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Text(
-                    text = notification.appLabel,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = formatTimestamp(notification.lastSeenAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            preview.first?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            preview.second
-                ?.takeIf { it.isNotBlank() && it != preview.first }
-                ?.let {
+        ListItem(
+            leadingContent = { AppMonogram(conversation.displayTitle) },
+            headlineContent = { Text(conversation.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            supportingContent = {
+                Column {
+                    Text(conversation.appLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        if (hidePreviews) stringResource(R.string.content_hidden) else conversation.latestPreview ?: stringResource(R.string.no_preview),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (notification.isRemoved) {
-                    SmallBadge("Removed")
-                }
-                if (notification.manualThreadLabel.trimmedOrNull() != null) {
-                    SmallBadge("Manual")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThreadSummaryCard(
-    thread: ThreadSummary,
-    hidePreview: Boolean,
-    onOpenThread: () -> Unit,
-    onTogglePinned: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpenThread),
-        color = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = thread.displayTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = thread.appLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = onTogglePinned) {
-                    Text(if (thread.isPinned) "Unpin" else "Pin")
-                }
-            }
-            Text(
-                text = if (hidePreview) {
-                    "Content hidden"
-                } else {
-                    thread.latestPreview.orEmpty().ifBlank { "No preview text saved." }
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "${thread.totalCount} items • Last activity ${formatTimestamp(thread.latestTimestamp)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun NotificationDetailScreen(
-    notification: NotificationEntity,
-    onSave: (String, String, String) -> Unit,
-    onDelete: () -> Unit,
-    onOpenThread: () -> Unit,
-) {
-    var categoryText by remember(notification.id) { mutableStateOf(notification.category) }
-    var tagsText by remember(notification.id) { mutableStateOf(notification.tags.joinToString(", ")) }
-    var threadLabelText by remember(notification.id) { mutableStateOf(notification.manualThreadLabel.orEmpty()) }
-    var showDiagnostics by rememberSaveable(notification.id) { mutableStateOf(false) }
-    val hasThread = notification.resolvedThreadId() != null
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SectionBlock(title = "Overview") {
-            DetailLine("App", notification.appLabel)
-            DetailLine("Package", notification.packageName)
-            DetailLine("Category", notification.category)
-            DetailLine("Posted", formatTimestamp(notification.postedAt))
-            DetailLine("Last update", formatTimestamp(notification.lastSeenAt))
-            notification.removedAt?.let { DetailLine("Removed", formatTimestamp(it)) }
-            notification.senderName?.let { DetailLine("Sender", it) }
-            notification.conversationTitle?.let { DetailLine("Conversation", it) }
-            notification.manualThreadLabel?.let { DetailLine("Manual thread", it) }
-        }
-
-        SectionBlock(title = "Saved content") {
-            Text(
-                text = notification.title.orEmpty().ifBlank { "(No title)" },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = notification.body.orEmpty().ifBlank { "(No body)" },
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            notification.bigText?.takeIf { it.isNotBlank() && it != notification.body }?.let {
-                HorizontalDivider()
-                Text("Expanded text", style = MaterialTheme.typography.labelLarge)
-                Text(it, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        SectionBlock(title = "Edit metadata") {
-            OutlinedTextField(
-                value = categoryText,
-                onValueChange = { categoryText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Category") },
-                singleLine = true,
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = tagsText,
-                onValueChange = { tagsText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Tags (comma-separated)") },
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = threadLabelText,
-                onValueChange = { threadLabelText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Manual thread name") },
-                supportingText = {
-                    Text("Leave blank to use notification metadata for grouping.")
-                },
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onSave(categoryText, tagsText, threadLabelText) }) {
-                    Text("Save")
-                }
-                if (hasThread) {
-                    OutlinedButton(onClick = onOpenThread) {
-                        Text("Open thread")
+            },
+            trailingContent = {
+                Column(horizontalAlignment = Alignment.End) {
+                    IconButton(onClick = onPin) {
+                        Icon(
+                            if (conversation.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                            contentDescription = stringResource(if (conversation.isPinned) R.string.unpin else R.string.pin),
+                        )
                     }
-                }
-                TextButton(onClick = onDelete) {
-                    Text("Delete")
+                    Text(relativeTime(conversation.latestActivityAt), style = MaterialTheme.typography.labelSmall)
                 }
             }
-        }
-
-        SectionBlock(
-            title = "Diagnostics",
-            subtitle = "Raw notification extras",
-            actionLabel = if (showDiagnostics) "Hide" else "Show",
-            onAction = { showDiagnostics = !showDiagnostics },
-        ) {
-            if (showDiagnostics) {
-                Spacer(Modifier.height(8.dp))
-                Text(notification.extrasJson, style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ThreadScreen(
-    selection: ThreadSelection,
-    thread: ThreadSummary?,
-    notifications: List<NotificationEntity>,
-    onRenameThread: (String) -> Unit,
-    onTogglePinned: () -> Unit,
-) {
-    var manualThreadName by rememberSaveable(selection.stableId) { mutableStateOf("") }
+private fun RecordDetailScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(
+            title = { Text(stringResource(R.string.notification_detail)) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+        )
+        RecordDetailContent(viewModel)
+    }
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecordDetailContent(viewModel: MainViewModel) {
+    val record by viewModel.selectedRecord.collectAsStateWithLifecycle()
+    val revisions by viewModel.selectedRevisions.collectAsStateWithLifecycle()
+    val current = record ?: return LoadingState()
+    var category by remember(current.id, current.category) { mutableStateOf(current.category) }
+    var tags by remember(current.id, current.tags) { mutableStateOf(current.tags.joinToString(", ")) }
+    var showEditor by rememberSaveable(current.id) { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    if (showEditor) {
+        ModalBottomSheet(onDismissRequest = { showEditor = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SectionTitle(stringResource(R.string.edit_metadata))
+                Text(
+                    stringResource(R.string.edit_metadata_body),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(category, { category = it }, label = { Text(stringResource(R.string.category)) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(tags, { tags = it }, label = { Text(stringResource(R.string.tags)) }, modifier = Modifier.fillMaxWidth())
+                Button(
+                    onClick = {
+                        viewModel.saveRecordMetadata(category, tags)
+                        showEditor = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.save_changes)) }
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+    if (confirmDelete) {
+        ConfirmDialog(
+            stringResource(R.string.delete_notification_title),
+            stringResource(R.string.delete_notification_body),
+            stringResource(R.string.delete),
+            onConfirm = { confirmDelete = false; viewModel.deleteSelectedRecord() },
+            onDismiss = { confirmDelete = false },
+        )
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            SectionBlock(title = thread?.displayTitle ?: selection.resolvedThreadId) {
-                Text(
-                    text = thread?.packageName ?: selection.packageName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "${notifications.size} items in thread",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                thread?.let { currentThread ->
-                    TextButton(onClick = onTogglePinned) {
-                        Text(if (currentThread.isPinned) "Unpin" else "Pin")
-                    }
-                }
+            DetailSection(stringResource(R.string.saved_content), Icons.Default.Notifications) {
+                Text(current.latestTitle ?: stringResource(R.string.no_title), style = MaterialTheme.typography.titleLarge)
+                current.latestBody?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+                current.latestBigText?.takeIf { it != current.latestBody }?.let { Text(it) }
             }
         }
         item {
-            SectionBlock(title = "Manual thread name") {
-                OutlinedTextField(
-                    value = manualThreadName,
-                    onValueChange = { manualThreadName = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Thread name") },
-                    supportingText = {
-                        Text("Save to rename this whole thread. Clear to fall back to notification metadata.")
-                    },
-                )
-                Spacer(Modifier.height(12.dp))
+            DetailSection(stringResource(R.string.overview), Icons.Default.Info) {
+                DetailLine(stringResource(R.string.app), current.appLabel)
+                DetailLine(stringResource(R.string.package_name), current.packageName)
+                DetailLine(stringResource(R.string.category), current.category)
+                DetailLine(stringResource(R.string.posted), fullTime(current.lifecycleStartedAt))
+                DetailLine(stringResource(R.string.last_update), fullTime(current.lastUpdatedAt))
+                current.endedAt?.let { DetailLine(stringResource(R.string.removed), fullTime(it)) }
+                current.conversationTitle?.let { DetailLine(stringResource(R.string.conversation), it) }
+                current.senderName?.let { DetailLine(stringResource(R.string.sender), it) }
+            }
+        }
+        item {
+            DetailSection(stringResource(R.string.manage), Icons.Default.Category) {
+                Text(stringResource(R.string.manage_notification_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onRenameThread(manualThreadName) }) {
-                        Text("Save name")
+                    OutlinedButton(onClick = { showEditor = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.edit_metadata))
                     }
-                    OutlinedButton(
-                        onClick = {
-                            manualThreadName = ""
-                            onRenameThread("")
-                        },
-                    ) {
-                        Text("Clear name")
+                    TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.delete)) }
+                }
+            }
+        }
+        item { SectionTitle(stringResource(R.string.revision_history)) }
+        items(revisions, key = NotificationRevisionEntity::id) { revision ->
+            DetailSection(fullTime(revision.capturedAt), Icons.Default.Notifications) {
+                revision.title?.let { Text(it, fontWeight = FontWeight.SemiBold) }
+                revision.body?.let { Text(it) }
+                if (revision.isRecovered) Text(stringResource(R.string.recovered), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationDetailScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val conversation by viewModel.selectedConversation.collectAsStateWithLifecycle()
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(
+            title = { Text(conversation?.displayTitle ?: stringResource(R.string.conversation)) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+        )
+        ConversationDetailContent(viewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationDetailContent(viewModel: MainViewModel) {
+    val conversation by viewModel.selectedConversation.collectAsStateWithLifecycle()
+    val entries = viewModel.conversationEntries.collectAsLazyPagingItems()
+    val current = conversation ?: return LoadingState()
+    var rename by remember(current.id, current.manualTitle) { mutableStateOf(current.manualTitle.orEmpty()) }
+    var showRename by rememberSaveable(current.id) { mutableStateOf(false) }
+    if (showRename) {
+        ModalBottomSheet(onDismissRequest = { showRename = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SectionTitle(stringResource(R.string.rename_conversation))
+                Text(stringResource(R.string.rename_conversation_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(rename, { rename = it }, label = { Text(stringResource(R.string.conversation_name)) }, modifier = Modifier.fillMaxWidth())
+                Button(
+                    onClick = {
+                        viewModel.renameConversation(rename)
+                        showRename = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.save_changes)) }
+                TextButton(
+                    onClick = {
+                        rename = ""
+                        viewModel.renameConversation("")
+                        showRename = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.use_automatic_name)) }
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            DetailSection(current.displayTitle, Icons.AutoMirrored.Filled.Chat) {
+                Text(current.appLabel, color = MaterialTheme.colorScheme.primary)
+                Text(pluralStringResource(R.plurals.activity_count, current.activityCount(), current.activityCount()))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = { viewModel.toggleConversationPinned(current) }) {
+                        Icon(if (current.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin, stringResource(if (current.isPinned) R.string.unpin else R.string.pin))
+                    }
+                    OutlinedButton(onClick = { showRename = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.rename))
                     }
                 }
             }
         }
-        if (notifications.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "No thread items",
-                    message = "This thread has no saved items right now.",
-                )
+        when {
+            entries.loadState.refresh is LoadState.Loading -> item { LoadingState() }
+            entries.loadState.refresh is LoadState.Error -> item { ErrorState(entries::retry) }
+            entries.itemCount == 0 -> item { EmptyState(Icons.AutoMirrored.Filled.Chat, R.string.empty_thread_title, R.string.empty_thread_body) }
+            else -> items(
+                count = entries.itemCount,
+                key = { index -> entries[index]?.stableId ?: "entry-$index" },
+                contentType = { "conversation-entry" },
+            ) { index ->
+                entries[index]?.let { ConversationEntry(it) }
             }
-        } else {
-            items(
-                items = notifications,
-                key = { it.id },
-            ) { item ->
+        }
+    }
+}
+
+@Composable
+private fun ConversationEntry(entry: ConversationEntryRow) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            entry.senderName?.let { Text(it, fontWeight = FontWeight.SemiBold) }
+            Text(entry.text ?: stringResource(R.string.no_preview))
+            Text(fullTime(entry.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun LegacySettingsScreen(viewModel: MainViewModel, settings: AppSettings) {
+    val accessGranted by viewModel.isNotificationAccessGranted.collectAsStateWithLifecycle()
+    val storage by viewModel.storageBuckets.collectAsStateWithLifecycle()
+    val metrics by viewModel.operationalSnapshot.collectAsStateWithLifecycle()
+    val appSources by viewModel.appSources.collectAsStateWithLifecycle()
+    var backupPassword by rememberSaveable { mutableStateOf("") }
+    var restoreSettings by rememberSaveable { mutableStateOf(false) }
+    var overridePackage by rememberSaveable { mutableStateOf("") }
+    var overrideCategory by rememberSaveable { mutableStateOf("") }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
+    var confirmReplace by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { viewModel.refreshStorageUsage() }
+    if (confirmClear) {
+        ConfirmDialog(
+            stringResource(R.string.clear_all_title),
+            stringResource(R.string.clear_all_body),
+            stringResource(R.string.clear_all),
+            onConfirm = { confirmClear = false; viewModel.clearAllData() },
+            onDismiss = { confirmClear = false },
+        )
+    }
+    if (confirmReplace) {
+        ConfirmDialog(
+            stringResource(R.string.replace_import_title),
+            stringResource(R.string.replace_import_body),
+            stringResource(R.string.replace),
+            onConfirm = {
+                confirmReplace = false
+                viewModel.requestImport(backupPassword, ImportMode.Replace, restoreSettings)
+            },
+            onDismiss = { confirmReplace = false },
+        )
+    }
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.settings)) })
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item { AccessStatus(accessGranted) { openNotificationListenerSettings(context) } }
+            item {
+                DetailSection(stringResource(R.string.capture), Icons.Default.Notifications) {
+                    Text(stringResource(R.string.capture_all_default), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            items(appSources, key = AppSource::packageName, contentType = { "capture-source" }) { app ->
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (item.isRemoved) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                     shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    SettingSwitchRow(
+                        title = app.appLabel,
+                        description = app.packageName,
+                        checked = app.packageName !in settings.excludedPackages,
+                        onChange = { included -> viewModel.setPackageExcluded(app.packageName, !included) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.category_rules), Icons.Default.Category) {
+                    Text(stringResource(R.string.category_rules_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        overridePackage,
+                        { overridePackage = it },
+                        label = { Text(stringResource(R.string.package_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        overrideCategory,
+                        { overrideCategory = it },
+                        label = { Text(stringResource(R.string.category)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.saveAppCategoryOverride(overridePackage, overrideCategory)
+                            overridePackage = ""
+                            overrideCategory = ""
+                        },
+                        enabled = overridePackage.isNotBlank() && overrideCategory.isNotBlank(),
                     ) {
-                        Text(
-                            text = item.senderName ?: item.title ?: item.appLabel,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = item.body.orEmpty().ifBlank { item.bigText.orEmpty().ifBlank { "(No body)" } },
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = formatTimestamp(item.postedAt),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Icon(Icons.Default.CheckCircle, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.save_rule))
                     }
+                    settings.appCategoryOverrides.toSortedMap().forEach { (packageName, category) ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(category)
+                                Text(packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { viewModel.removeAppCategoryOverride(packageName) }) {
+                                Text(stringResource(R.string.remove))
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.privacy), Icons.Default.Shield) {
+                    SettingSwitchRow(stringResource(R.string.hide_list_previews), stringResource(R.string.hide_list_previews_body), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
+                    SettingSwitchRow(stringResource(R.string.hide_recents), stringResource(R.string.hide_recents_body), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
+                    SettingSwitchRow(stringResource(R.string.block_screenshots), stringResource(R.string.block_screenshots_body), settings.blockScreenshots, viewModel::setBlockScreenshots)
+                    SettingSwitchRow(stringResource(R.string.app_lock), stringResource(R.string.app_lock_body), settings.appLockEnabled, viewModel::setAppLockEnabled)
+                    if (settings.appLockEnabled) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SettingsStore.APP_LOCK_TIMEOUT_OPTIONS.forEach { minutes ->
+                                FilterChip(
+                                    selected = settings.appLockTimeoutMinutes == minutes,
+                                    onClick = { viewModel.setAppLockTimeoutMinutes(minutes) },
+                                    label = { Text(lockTimeoutLabel(minutes)) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.appearance), Icons.Default.Palette) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ThemeMode.entries.forEach { mode ->
+                            FilterChip(settings.themeMode == mode, { viewModel.setThemeMode(mode) }, { Text(mode.label()) })
+                        }
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.retention_storage), Icons.Default.Storage) {
+                    Text(stringResource(R.string.retention_explanation), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MainViewModel.RETENTION_OPTIONS.forEach { days ->
+                            FilterChip(settings.retentionDays == days, { viewModel.setRetentionDays(days) }, { Text(retentionLabel(days)) })
+                        }
+                    }
+                    storage.forEach { bucket -> DetailLine(bucket.label, formatBytes(bucket.sizeBytes)) }
+                    OutlinedButton(onClick = viewModel::refreshStorageUsage) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.refresh_storage))
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.backup_restore), Icons.Default.Backup) {
+                    Text(stringResource(R.string.backup_warning), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = backupPassword,
+                        onValueChange = { backupPassword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.backup_password)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                    )
+                    Button(onClick = { viewModel.requestEncryptedBackup(backupPassword) }) {
+                        Icon(Icons.Default.Backup, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.create_encrypted_backup))
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.requestImport(backupPassword, ImportMode.Merge, restoreSettings) }) { Text(stringResource(R.string.import_merge)) }
+                        TextButton(onClick = { confirmReplace = true }) { Text(stringResource(R.string.import_replace)) }
+                    }
+                    SettingSwitchRow(
+                        stringResource(R.string.restore_settings),
+                        stringResource(R.string.restore_settings_body),
+                        restoreSettings,
+                        { restoreSettings = it },
+                    )
+                    TextButton(onClick = viewModel::requestReadableExport) { Text(stringResource(R.string.export_readable_json)) }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.advanced), Icons.Default.Tune) {
+                    TextButton(onClick = { showAdvanced = !showAdvanced }) { Text(stringResource(if (showAdvanced) R.string.hide else R.string.show)) }
+                    if (showAdvanced) {
+                        DetailLine(stringResource(R.string.listener_connections), metrics.listenerConnectedCount.toString())
+                        DetailLine(stringResource(R.string.events_stored), metrics.postedEventCount.toString())
+                        DetailLine(stringResource(R.string.messages_stored), metrics.messageCount.toString())
+                        DetailLine(stringResource(R.string.duplicates_skipped), metrics.duplicateEventCount.toString())
+                        DetailLine(stringResource(R.string.queue_high_water), metrics.queueHighWaterMark.toString())
+                        DetailLine(stringResource(R.string.last_batch_latency), stringResource(R.string.milliseconds, metrics.lastBatchLatencyMillis))
+                        DetailLine(stringResource(R.string.store_failures), metrics.storeFailureCount.toString())
+                        OutlinedButton(onClick = viewModel::requestDiagnosticsExport) { Text(stringResource(R.string.export_diagnostics)) }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = viewModel::clearLogs) { Text(stringResource(R.string.clear_logs)) }
+                            TextButton(onClick = viewModel::clearCrashReports) { Text(stringResource(R.string.clear_crashes)) }
+                        }
+                        if (DemoDataSupport.isAvailable) OutlinedButton(onClick = viewModel::loadDemoData) { Text(stringResource(R.string.load_demo_data)) }
+                        HorizontalDivider()
+                        TextButton(onClick = { confirmClear = true }) { Text(stringResource(R.string.clear_all), color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.about), Icons.Default.Info) {
+                    DetailLine(stringResource(R.string.version), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    TextButton(onClick = { openUrl(BuildConfig.PUBLIC_PRIVACY_URL, context) }) { Text(stringResource(R.string.privacy_policy)) }
+                    TextButton(onClick = { openUrl(BuildConfig.PUBLIC_REPO_URL, context) }) { Text(stringResource(R.string.source_code)) }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsScreen(
+    viewModel: MainViewModel,
     settings: AppSettings,
-    storageBuckets: List<StorageBucket>,
-    operationalSnapshot: OperationalSnapshot,
-    appSources: List<AppSource>,
-    notificationAccessGranted: Boolean,
-    onOpenNotificationAccess: () -> Unit,
-    onHidePreviewsChanged: (Boolean) -> Unit,
-    onRetentionSelected: (Int) -> Unit,
-    onFallbackCategoryChanged: (String) -> Unit,
-    onThemeModeChanged: (ThemeMode) -> Unit,
-    onSaveAppCategoryOverride: (String, String) -> Unit,
-    onRemoveAppCategoryOverride: (String) -> Unit,
-    onRefreshStorage: () -> Unit,
-    onRequestExport: () -> Unit,
-    onRequestDiagnosticsExport: () -> Unit,
-    onClearLogs: () -> Unit,
-    onClearCrashReports: () -> Unit,
-    onLoadDemoData: () -> Unit,
-    onClearAll: () -> Unit,
+    onOpenCapture: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenStorage: () -> Unit,
+    onOpenBackup: () -> Unit,
+    onOpenAdvanced: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
+    val accessGranted by viewModel.isNotificationAccessGranted.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var fallbackCategoryText by remember(settings.fallbackCategory) { mutableStateOf(settings.fallbackCategory) }
-    var overridePackageText by rememberSaveable { mutableStateOf("") }
-    var overrideCategoryText by rememberSaveable { mutableStateOf("") }
-    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.settings)) })
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item { AccessStatus(accessGranted) { openNotificationListenerSettings(context) } }
+            item { SectionTitle(stringResource(R.string.settings_for_your_data)) }
+            item { SettingsShortcut(Icons.Default.Notifications, R.string.capture_rules, R.string.capture_rules_summary, onOpenCapture) }
+            item { SettingsShortcut(Icons.Default.Shield, R.string.privacy_security, R.string.privacy_security_summary, onOpenPrivacy) }
+            item { SettingsShortcut(Icons.Default.Storage, R.string.storage_retention, R.string.storage_retention_summary, onOpenStorage) }
+            item { SettingsShortcut(Icons.Default.Backup, R.string.backups_export, R.string.backups_export_summary, onOpenBackup) }
+            item {
+                DetailSection(stringResource(R.string.appearance), Icons.Default.Palette) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ThemeMode.entries.forEach { mode ->
+                            FilterChip(settings.themeMode == mode, { viewModel.setThemeMode(mode) }, { Text(mode.label()) })
+                        }
+                    }
+                }
+            }
+            item { SectionTitle(stringResource(R.string.more)) }
+            item { SettingsShortcut(Icons.Default.Tune, R.string.advanced_support, R.string.advanced_support_summary, onOpenAdvanced) }
+            item { SettingsShortcut(Icons.Default.Info, R.string.about, R.string.about_summary, onOpenAbout) }
+        }
+    }
+}
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+@Composable
+private fun SettingsShortcut(icon: ImageVector, titleRes: Int, summaryRes: Int, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.large,
     ) {
-        NotificationAccessStatus(
-            notificationAccessGranted = notificationAccessGranted,
-            onOpenNotificationAccess = onOpenNotificationAccess,
+        ListItem(
+            leadingContent = {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = CircleShape, modifier = Modifier.size(40.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null) }
+                }
+            },
+            headlineContent = { Text(stringResource(titleRes), fontWeight = FontWeight.SemiBold) },
+            supportingContent = { Text(stringResource(summaryRes)) },
         )
+    }
+}
 
-        SectionBlock(title = "Appearance") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeMode.entries.forEach { themeMode ->
-                    FilterChip(
-                        selected = settings.themeMode == themeMode,
-                        onClick = { onThemeModeChanged(themeMode) },
-                        label = { Text(themeMode.label) },
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun CaptureSettingsScreen(viewModel: MainViewModel, settings: AppSettings, onBack: () -> Unit) {
+    val accessGranted by viewModel.isNotificationAccessGranted.collectAsStateWithLifecycle()
+    val appSources by viewModel.appSources.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var overridePackage by rememberSaveable { mutableStateOf("") }
+    var overrideCategory by rememberSaveable { mutableStateOf("") }
+    SettingsPage(R.string.capture_rules, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { AccessStatus(accessGranted) { openNotificationListenerSettings(context) } }
+            item {
+                DetailSection(stringResource(R.string.capture), Icons.Default.Notifications) {
+                    Text(stringResource(R.string.capture_all_default), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (appSources.isNotEmpty()) item { SectionTitle(stringResource(R.string.included_apps)) }
+            items(appSources, key = AppSource::packageName) { app ->
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
+                    SettingSwitchRow(
+                        title = app.appLabel,
+                        description = app.packageName,
+                        checked = app.packageName !in settings.excludedPackages,
+                        onChange = { included -> viewModel.setPackageExcluded(app.packageName, !included) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
             }
-        }
-
-        SectionBlock(title = "Privacy & retention") {
-            SettingToggleRow(
-                title = "Hide previews in list views",
-                description = "Keep timeline, threads, and priority preview text hidden until a detail view is opened.",
-                checked = settings.hideNotificationPreviews,
-                onCheckedChange = onHidePreviewsChanged,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text("Retention window", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MainViewModel.RETENTION_OPTIONS.forEach { days ->
-                    FilterChip(
-                        selected = settings.retentionDays == days,
-                        onClick = { onRetentionSelected(days) },
-                        label = {
-                            Text(
-                                when (days) {
-                                    0 -> "Never auto-delete"
-                                    1 -> "1 day"
-                                    else -> "$days days"
-                                },
-                            )
+            item {
+                DetailSection(stringResource(R.string.category_rules), Icons.Default.Category) {
+                    Text(stringResource(R.string.category_rules_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(overridePackage, { overridePackage = it }, label = { Text(stringResource(R.string.package_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(overrideCategory, { overrideCategory = it }, label = { Text(stringResource(R.string.category)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Button(
+                        onClick = {
+                            viewModel.saveAppCategoryOverride(overridePackage, overrideCategory)
+                            overridePackage = ""
+                            overrideCategory = ""
                         },
-                    )
-                }
-            }
-        }
-
-        SectionBlock(title = "Categories") {
-            OutlinedTextField(
-                value = fallbackCategoryText,
-                onValueChange = { fallbackCategoryText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Fallback category") },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                ),
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = { onFallbackCategoryChanged(fallbackCategoryText) }) {
-                Text("Save fallback")
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-            Text("Per-app override", style = MaterialTheme.typography.labelLarge)
-            if (appSources.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    appSources.forEach { source ->
-                        FilterChip(
-                            selected = overridePackageText == source.packageName,
-                            onClick = { overridePackageText = source.packageName },
-                            label = { Text(source.appLabel) },
-                        )
+                        enabled = overridePackage.isNotBlank() && overrideCategory.isNotBlank(),
+                    ) { Text(stringResource(R.string.save_rule)) }
+                    settings.appCategoryOverrides.toSortedMap().forEach { (packageName, category) ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(category)
+                                Text(packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { viewModel.removeAppCategoryOverride(packageName) }) { Text(stringResource(R.string.remove)) }
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = overridePackageText,
-                onValueChange = { overridePackageText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Package name") },
-                singleLine = true,
-                supportingText = {
-                    Text("Pick a known app above or enter a package manually.")
-                },
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = overrideCategoryText,
-                onValueChange = { overrideCategoryText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Override category") },
-                singleLine = true,
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    onSaveAppCategoryOverride(overridePackageText, overrideCategoryText)
-                    overridePackageText = ""
-                    overrideCategoryText = ""
-                },
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun PrivacySettingsScreen(viewModel: MainViewModel, settings: AppSettings, onBack: () -> Unit) {
+    SettingsPage(R.string.privacy_security, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                DetailSection(stringResource(R.string.privacy), Icons.Default.Shield) {
+                    SettingSwitchRow(stringResource(R.string.hide_list_previews), stringResource(R.string.hide_list_previews_body), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
+                    SettingSwitchRow(stringResource(R.string.hide_recents), stringResource(R.string.hide_recents_body), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
+                    SettingSwitchRow(stringResource(R.string.block_screenshots), stringResource(R.string.block_screenshots_body), settings.blockScreenshots, viewModel::setBlockScreenshots)
+                    SettingSwitchRow(stringResource(R.string.app_lock), stringResource(R.string.app_lock_body), settings.appLockEnabled, viewModel::setAppLockEnabled)
+                }
+            }
+            if (settings.appLockEnabled) item {
+                DetailSection(stringResource(R.string.lock_after), Icons.Default.Lock) {
+                    Text(stringResource(R.string.lock_after_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsStore.APP_LOCK_TIMEOUT_OPTIONS.forEach { minutes ->
+                            FilterChip(
+                                selected = settings.appLockTimeoutMinutes == minutes,
+                                onClick = { viewModel.setAppLockTimeoutMinutes(minutes) },
+                                label = { Text(lockTimeoutLabel(minutes)) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun StorageSettingsScreen(viewModel: MainViewModel, settings: AppSettings, onBack: () -> Unit) {
+    val storage by viewModel.storageBuckets.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.refreshStorageUsage() }
+    SettingsPage(R.string.storage_retention, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                DetailSection(stringResource(R.string.retention_storage), Icons.Default.Storage) {
+                    Text(stringResource(R.string.retention_explanation), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MainViewModel.RETENTION_OPTIONS.forEach { days ->
+                            FilterChip(settings.retentionDays == days, { viewModel.setRetentionDays(days) }, { Text(retentionLabel(days)) })
+                        }
+                    }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.storage_used), Icons.Default.Storage) {
+                    if (storage.isEmpty()) Text(stringResource(R.string.calculating_storage))
+                    storage.forEach { bucket -> DetailLine(bucket.label, formatBytes(bucket.sizeBytes)) }
+                    OutlinedButton(onClick = viewModel::refreshStorageUsage) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.refresh_storage))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun BackupSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    var password by rememberSaveable { mutableStateOf("") }
+    var restoreSettings by rememberSaveable { mutableStateOf(false) }
+    var confirmReplace by rememberSaveable { mutableStateOf(false) }
+    if (confirmReplace) {
+        ConfirmDialog(
+            stringResource(R.string.replace_import_title),
+            stringResource(R.string.replace_import_body),
+            stringResource(R.string.replace),
+            onConfirm = { confirmReplace = false; viewModel.requestImport(password, ImportMode.Replace, restoreSettings) },
+            onDismiss = { confirmReplace = false },
+        )
+    }
+    SettingsPage(R.string.backups_export, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                DetailSection(stringResource(R.string.backup_restore), Icons.Default.Backup) {
+                    Text(stringResource(R.string.backup_warning), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.backup_password)) }, modifier = Modifier.fillMaxWidth(), visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                    Button(onClick = { viewModel.requestEncryptedBackup(password) }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Backup, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.create_encrypted_backup))
+                    }
+                    Text(stringResource(R.string.restore_from_backup), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.requestImport(password, ImportMode.Merge, restoreSettings) }) { Text(stringResource(R.string.import_merge)) }
+                        TextButton(onClick = { confirmReplace = true }) { Text(stringResource(R.string.import_replace)) }
+                    }
+                    SettingSwitchRow(stringResource(R.string.restore_settings), stringResource(R.string.restore_settings_body), restoreSettings, { restoreSettings = it })
+                    HorizontalDivider()
+                    TextButton(onClick = viewModel::requestReadableExport) { Text(stringResource(R.string.export_readable_json)) }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AdvancedSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val metrics by viewModel.operationalSnapshot.collectAsStateWithLifecycle()
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
+    if (confirmClear) {
+        ConfirmDialog(
+            stringResource(R.string.clear_all_title),
+            stringResource(R.string.clear_all_body),
+            stringResource(R.string.clear_all),
+            onConfirm = { confirmClear = false; viewModel.clearAllData() },
+            onDismiss = { confirmClear = false },
+        )
+    }
+    SettingsPage(R.string.advanced_support, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                DetailSection(stringResource(R.string.capture_health), Icons.Default.Tune) {
+                    DetailLine(stringResource(R.string.listener_connections), metrics.listenerConnectedCount.toString())
+                    DetailLine(stringResource(R.string.events_stored), metrics.postedEventCount.toString())
+                    DetailLine(stringResource(R.string.messages_stored), metrics.messageCount.toString())
+                    DetailLine(stringResource(R.string.duplicates_skipped), metrics.duplicateEventCount.toString())
+                    DetailLine(stringResource(R.string.queue_high_water), metrics.queueHighWaterMark.toString())
+                    DetailLine(stringResource(R.string.last_batch_latency), stringResource(R.string.milliseconds, metrics.lastBatchLatencyMillis))
+                    DetailLine(stringResource(R.string.store_failures), metrics.storeFailureCount.toString())
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.support_tools), Icons.Default.Tune) {
+                    OutlinedButton(onClick = viewModel::requestDiagnosticsExport) { Text(stringResource(R.string.export_diagnostics)) }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = viewModel::clearLogs) { Text(stringResource(R.string.clear_logs)) }
+                        TextButton(onClick = viewModel::clearCrashReports) { Text(stringResource(R.string.clear_crashes)) }
+                    }
+                    if (DemoDataSupport.isAvailable) OutlinedButton(onClick = viewModel::loadDemoData) { Text(stringResource(R.string.load_demo_data)) }
+                }
+            }
+            item {
+                DetailSection(stringResource(R.string.danger_zone), Icons.Default.Delete) {
+                    Text(stringResource(R.string.clear_all_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = { confirmClear = true }) { Text(stringResource(R.string.clear_all), color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AboutSettingsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    SettingsPage(R.string.about, onBack) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                DetailSection(stringResource(R.string.about), Icons.Default.Info) {
+                    DetailLine(stringResource(R.string.version), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    TextButton(onClick = { openUrl(BuildConfig.PUBLIC_PRIVACY_URL, context) }) { Text(stringResource(R.string.privacy_policy)) }
+                    TextButton(onClick = { openUrl(BuildConfig.PUBLIC_REPO_URL, context) }) { Text(stringResource(R.string.source_code)) }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsPage(titleRes: Int, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(
+            title = { Text(stringResource(titleRes)) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                }
+            },
+        )
+        content()
+    }
+}
+
+@Composable
+private fun AccessStatus(granted: Boolean, onOpen: () -> Unit) {
+    Surface(
+        color = if (granted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = CircleShape,
+                modifier = Modifier.size(40.dp),
             ) {
-                Text("Save override")
-            }
-
-            if (settings.appCategoryOverrides.isEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "No app overrides configured.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Spacer(Modifier.height(16.dp))
-                settings.appCategoryOverrides.forEach { (packageName, category) ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(packageName, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = category,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        TextButton(onClick = { onRemoveAppCategoryOverride(packageName) }) {
-                            Text("Remove")
-                        }
-                    }
-                }
-            }
-        }
-
-        SectionBlock(title = "About & support") {
-            DetailLine("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-            DetailLine("Build", BuildConfig.BUILD_TYPE.replaceFirstChar(Char::uppercase))
-            DetailLine("License", BuildConfig.OSS_LICENSE_NAME)
-            DetailLine("Package", BuildConfig.APPLICATION_ID)
-            Spacer(Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { openUrl(BuildConfig.PUBLIC_REPO_URL, context) }) {
-                    Text("GitHub repo")
-                }
-                OutlinedButton(onClick = { openUrl(BuildConfig.PUBLIC_LATEST_RELEASE_URL, context) }) {
-                    Text("Latest release")
-                }
-                OutlinedButton(onClick = { openUrl(BuildConfig.PUBLIC_PRIVACY_URL, context) }) {
-                    Text("Privacy policy")
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = "Diagnostics bundles include local app health data, logs, crash reports, and storage summaries. Notification contents are not included.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onRequestDiagnosticsExport) {
-                    Text("Export diagnostics")
-                }
-                OutlinedButton(onClick = onRequestExport) {
-                    Text("Export notifications")
-                }
-            }
-            if (DemoDataSupport.isAvailable) {
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onLoadDemoData) {
-                    Text("Load demo data")
-                }
-            }
-        }
-
-        SectionBlock(
-            title = "Advanced",
-            subtitle = "Storage, export, and destructive tools",
-            actionLabel = if (showAdvanced) "Hide" else "Show",
-            onAction = { showAdvanced = !showAdvanced },
-        ) {
-            if (showAdvanced) {
-                Spacer(Modifier.height(8.dp))
-                Text("Storage & export", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onRefreshStorage) {
-                        Text("Refresh usage")
-                    }
-                    OutlinedButton(onClick = onRequestDiagnosticsExport) {
-                        Text("Export diagnostics")
-                    }
-                    OutlinedButton(onClick = onRequestExport) {
-                        Text("Export notifications")
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                if (storageBuckets.isEmpty()) {
-                    Text(
-                        "Storage report unavailable yet.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    storageBuckets.forEach { bucket ->
-                        StorageBucketRow(bucket)
-                    }
-                    Text(
-                        text = "Total: ${formatBytes(storageBuckets.sumOf { it.sizeBytes })}",
-                        style = MaterialTheme.typography.labelLarge,
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (granted) Icons.Default.CheckCircle else Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                Text("Operational health", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(if (granted) R.string.access_enabled else R.string.access_needed), fontWeight = FontWeight.SemiBold)
+                Text(stringResource(if (granted) R.string.access_enabled_body else R.string.access_needed_body), style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onOpen) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(if (granted) R.string.manage else R.string.open_settings))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppMonogram(label: String) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(42.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label.trim().firstOrNull()?.uppercase() ?: "?", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun DetailSection(
+    title: String,
+    icon: ImageVector? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                icon?.let {
+                    Icon(
+                        imageVector = it,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 Text(
-                    text = "Local counters help verify listener health, capture throughput, export failures, and uncaught crashes in release builds.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                OperationalMetricRow("App starts", operationalSnapshot.appStartCount.toString())
-                OperationalMetricRow("Listener connected", operationalSnapshot.listenerConnectedCount.toString())
-                OperationalMetricRow("Listener disconnected", operationalSnapshot.listenerDisconnectedCount.toString())
-                OperationalMetricRow("Posted events stored", operationalSnapshot.postedEventCount.toString())
-                OperationalMetricRow("Removed events stored", operationalSnapshot.removedEventCount.toString())
-                OperationalMetricRow("Queue drops", operationalSnapshot.queueDropCount.toString())
-                OperationalMetricRow("Store failures", operationalSnapshot.storeFailureCount.toString())
-                OperationalMetricRow("Remove failures", operationalSnapshot.removeFailureCount.toString())
-                OperationalMetricRow("Export failures", operationalSnapshot.exportFailureCount.toString())
-                OperationalMetricRow("Last app start", formatOptionalTimestamp(operationalSnapshot.lastAppStartAt))
-                OperationalMetricRow("Last listener connect", formatOptionalTimestamp(operationalSnapshot.lastListenerConnectedAt))
-                OperationalMetricRow("Last listener disconnect", formatOptionalTimestamp(operationalSnapshot.lastListenerDisconnectedAt))
-                OperationalMetricRow("Last queue drop", formatOptionalTimestamp(operationalSnapshot.lastQueueDropAt))
-                OperationalMetricRow("Last store failure", formatOptionalTimestamp(operationalSnapshot.lastStoreFailureAt))
-                OperationalMetricRow("Last remove failure", formatOptionalTimestamp(operationalSnapshot.lastRemoveFailureAt))
-                OperationalMetricRow("Last export failure", formatOptionalTimestamp(operationalSnapshot.lastExportFailureAt))
-                operationalSnapshot.latestCrash?.let { crash ->
-                    OperationalMetricRow("Latest crash", "${crash.exceptionType} at ${formatTimestamp(crash.occurredAt)}")
-                    OperationalMetricRow("Crash thread", crash.threadName)
-                    crash.message?.takeIf { it.isNotBlank() }?.let { message ->
-                        OperationalMetricRow("Crash message", message)
-                    }
-                    OperationalMetricRow("Crash report", crash.reportPath)
-                } ?: Text(
-                    text = "No crash reports recorded on this device yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                Text(
-                    text = "Danger zone",
-                    style = MaterialTheme.typography.titleSmall,
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { heading() },
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Routine cleanup",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onClearLogs) {
-                        Text("Clear logs")
-                    }
-                    OutlinedButton(onClick = onClearCrashReports) {
-                        Text("Clear crash reports")
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Clear all deletes saved notifications, logs, crash reports, cache, and settings from inside the app.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onClearAll) {
-                    Text("Clear all app data")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingToggleRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
-    }
-}
-
-@Composable
-private fun NotificationAccessStatus(
-    notificationAccessGranted: Boolean,
-    onOpenNotificationAccess: () -> Unit,
-) {
-    if (notificationAccessGranted) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Notification access granted",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            TextButton(onClick = onOpenNotificationAccess) {
-                Text("Manage")
-            }
-        }
-        return
-    }
-
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Notification access needed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = "Grant access in system settings so incoming notifications can be saved.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            OutlinedButton(onClick = onOpenNotificationAccess) {
-                Text("Open settings")
-            }
-        }
-    }
-}
-
-@Composable
-private fun StorageBucketRow(bucket: StorageBucket) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(bucket.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(
-            text = bucket.path,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(formatBytes(bucket.sizeBytes), style = MaterialTheme.typography.bodyMedium)
-        HorizontalDivider(
-            modifier = Modifier.padding(top = 8.dp),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-        )
-    }
-}
-
-@Composable
-private fun OperationalMetricRow(
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-}
-
-@Composable
-private fun EmptyState(
-    title: String,
-    message: String,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SectionBlock(
-    title: String? = null,
-    subtitle: String? = null,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (title != null || subtitle != null || (actionLabel != null && onAction != null)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        title?.let {
-                            Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        }
-                        subtitle?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    if (actionLabel != null && onAction != null) {
-                        TextButton(onClick = onAction) {
-                            Text(actionLabel)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
             }
             content()
         }
@@ -1667,130 +1831,202 @@ private fun SectionBlock(
 }
 
 @Composable
-private fun SectionHeading(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
+private fun SettingSwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked, onChange)
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value)
+    }
+}
+
+@Composable
+private fun SectionTitle(value: String) {
+    Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+}
+
+@Composable
+private fun SelectionHint(icon: ImageVector, messageRes: Int) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(40.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(messageRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun EmptyState(icon: ImageVector, titleRes: Int, bodyRes: Int) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(titleRes), fontWeight = FontWeight.SemiBold)
+                Text(stringResource(bodyRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(stringResource(R.string.loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ErrorState(onRetry: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.large) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.load_failed), color = MaterialTheme.colorScheme.onErrorContainer)
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfirmDialog(title: String, message: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = { Button(onClick = onConfirm) { Text(confirmLabel) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
 @Composable
-private fun FilterSummaryPill(
-    text: String,
-    emphasized: Boolean,
-) {
-    Surface(
-        color = if (emphasized) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
-        contentColor = if (emphasized) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelMedium,
-        )
-    }
+private fun DateWindow.label(): String = when (this) {
+    DateWindow.AllTime -> stringResource(R.string.all_time)
+    DateWindow.Today -> stringResource(R.string.today)
+    DateWindow.LastDay -> stringResource(R.string.last_day)
+    DateWindow.Last7Days -> stringResource(R.string.last_7_days)
+    DateWindow.Last30Days -> stringResource(R.string.last_30_days)
+    DateWindow.Last90Days -> stringResource(R.string.last_90_days)
 }
 
 @Composable
-private fun SmallBadge(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+private fun DateWindow.quickLabel(): String = when (this) {
+    DateWindow.Today -> stringResource(R.string.today)
+    DateWindow.Last7Days -> stringResource(R.string.last_7_days_short)
+    DateWindow.AllTime -> stringResource(R.string.all_time)
+    else -> label()
 }
 
 @Composable
-private fun DetailLine(
-    label: String,
-    value: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
-    }
+private fun ThemeMode.label(): String = when (this) {
+    ThemeMode.System -> stringResource(R.string.follow_system)
+    ThemeMode.Light -> stringResource(R.string.light)
+    ThemeMode.Dark -> stringResource(R.string.dark)
 }
 
-private fun buildNotificationPreview(
-    notification: NotificationEntity,
-    hideContent: Boolean,
-): Pair<String?, String?> {
-    if (hideContent) {
-        return "Content hidden" to "Open the detail view to reveal saved text."
-    }
-    return notification.title to (notification.body ?: notification.bigText)
+@Composable
+private fun retentionLabel(days: Int): String = when (days) {
+    0 -> stringResource(R.string.keep_until_deleted)
+    else -> pluralStringResource(R.plurals.days_count, days, days)
 }
 
-private fun formatTimestamp(timestamp: Long): String {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        .withZone(ZoneId.systemDefault())
-    return formatter.format(Instant.ofEpochMilli(timestamp))
+@Composable
+private fun lockTimeoutLabel(minutes: Int): String = when (minutes) {
+    0 -> stringResource(R.string.immediately)
+    1 -> stringResource(R.string.one_minute)
+    else -> pluralStringResource(R.plurals.minutes_count, minutes, minutes)
 }
 
-private fun formatOptionalTimestamp(timestamp: Long?): String {
-    return timestamp?.let(::formatTimestamp) ?: "Never"
+private fun relativeTime(timestamp: Long): String = DateUtils.getRelativeTimeSpanString(
+    timestamp,
+    System.currentTimeMillis(),
+    DateUtils.MINUTE_IN_MILLIS,
+    DateUtils.FORMAT_ABBREV_RELATIVE,
+).toString()
+
+private fun fullTime(timestamp: Long): String = java.text.DateFormat.getDateTimeInstance(
+    java.text.DateFormat.MEDIUM,
+    java.text.DateFormat.SHORT,
+).format(java.util.Date(timestamp))
+
+private fun formatBytes(size: Long): String = when {
+    size < 1024 -> "$size B"
+    size < 1024 * 1024 -> "${size / 1024} KB"
+    else -> String.format(Locale.getDefault(), "%.1f MB", size / (1024f * 1024f))
 }
 
-private fun formatBytes(sizeBytes: Long): String {
-    if (sizeBytes < 1024) {
-        return "$sizeBytes B"
+private fun applyWindowPrivacy(activity: Activity, settings: AppSettings) {
+    if (settings.blockScreenshots) {
+        activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    } else {
+        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
-    if (sizeBytes < 1024 * 1024) {
-        return "${sizeBytes / 1024} KB"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        activity.setRecentsScreenshotEnabled(!settings.hideRecentsPreview)
     }
-    return String.format("%.2f MB", sizeBytes / (1024f * 1024f))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        activity.window.decorView.setContentSensitivity(View.CONTENT_SENSITIVITY_SENSITIVE)
+    }
 }
-
-private val ThemeMode.label: String
-    get() = when (this) {
-        ThemeMode.System -> "Follow system"
-        ThemeMode.Light -> "Light"
-        ThemeMode.Dark -> "Dark"
-    }
 
 private fun hasNotificationListenerAccess(context: Context): Boolean {
     val component = ComponentName(context, NotificationCaptureService::class.java)
-    val enabledListeners = Settings.Secure.getString(
-        context.contentResolver,
-        "enabled_notification_listeners",
-    ).orEmpty()
-    return enabledListeners.split(':').any { flattened ->
-        ComponentName.unflattenFromString(flattened) == component
-    }
+    return Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        .orEmpty()
+        .split(':')
+        .any { ComponentName.unflattenFromString(it) == component }
 }
 
 private fun openNotificationListenerSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching {
-        context.startActivity(intent)
+        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }.recoverCatching {
-        context.startActivity(
-            Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
 private fun openUrl(url: String, context: Context) {
-    runCatching {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-    }
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }

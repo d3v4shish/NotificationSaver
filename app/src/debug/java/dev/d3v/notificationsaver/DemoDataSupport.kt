@@ -1,164 +1,131 @@
 package dev.d3v.notificationsaver
 
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-
 object DemoDataSupport {
     const val isAvailable: Boolean = true
 
     suspend fun seed(app: NotificationSaverApp) {
-        val now = Instant.now()
-        val records = listOf(
-            demoNotification(
-                sourceKey = "demo-whatsapp-family-1",
-                packageName = "com.whatsapp",
-                appLabel = "WhatsApp",
-                title = "Weekend Trip",
-                body = "Alice: Tickets are booked for Sunday morning.",
-                conversationTitle = "Weekend Trip",
-                senderName = "Alice",
-                category = "Messages",
-                postedAt = now.minus(2, ChronoUnit.HOURS).toEpochMilli(),
-                lastSeenAt = now.minus(90, ChronoUnit.MINUTES).toEpochMilli(),
-                importance = 3,
-            ),
-            demoNotification(
-                sourceKey = "demo-whatsapp-family-2",
-                packageName = "com.whatsapp",
-                appLabel = "WhatsApp",
-                title = "Weekend Trip",
-                body = "Bob: I'll bring snacks and chargers.",
-                conversationTitle = "Weekend Trip",
-                senderName = "Bob",
-                category = "Messages",
-                postedAt = now.minus(80, ChronoUnit.MINUTES).toEpochMilli(),
-                lastSeenAt = now.minus(70, ChronoUnit.MINUTES).toEpochMilli(),
-                importance = 3,
-            ),
-            demoNotification(
-                sourceKey = "demo-instagram-1",
-                packageName = "com.instagram.android",
-                appLabel = "Instagram",
-                title = "Avery",
-                body = "Can you review the reel cover before lunch?",
-                conversationTitle = null,
-                senderName = "Avery",
-                category = "Social",
-                postedAt = now.minus(40, ChronoUnit.MINUTES).toEpochMilli(),
-                lastSeenAt = now.minus(35, ChronoUnit.MINUTES).toEpochMilli(),
-                importance = 2,
-            ),
-            demoNotification(
-                sourceKey = "demo-telegram-1",
-                packageName = "org.telegram.messenger",
-                appLabel = "Telegram",
-                title = "Launch Team",
-                body = "Reminder: QA freeze at 5 PM.",
-                conversationTitle = "Launch Team",
-                senderName = "Nina",
-                category = "Messages",
-                postedAt = now.minus(25, ChronoUnit.MINUTES).toEpochMilli(),
-                lastSeenAt = now.minus(20, ChronoUnit.MINUTES).toEpochMilli(),
-                importance = 4,
-            ),
-            demoNotification(
-                sourceKey = "demo-gmail-1",
-                packageName = "com.google.android.gm",
-                appLabel = "Gmail",
-                title = "Release checklist approved",
-                body = "Your release checklist was approved by QA.",
-                conversationTitle = null,
-                senderName = null,
-                category = "Email",
-                postedAt = now.minus(3, ChronoUnit.HOURS).toEpochMilli(),
-                lastSeenAt = now.minus(3, ChronoUnit.HOURS).toEpochMilli(),
-                importance = 1,
-            ),
-            demoNotification(
-                sourceKey = "demo-bank-1",
-                packageName = "com.bank.app",
-                appLabel = "Acme Bank",
-                title = "UPI payment received",
-                body = "INR 1,250 received from Jordan.",
-                conversationTitle = null,
-                senderName = null,
-                category = "Finance",
-                postedAt = now.minus(6, ChronoUnit.HOURS).toEpochMilli(),
-                lastSeenAt = now.minus(6, ChronoUnit.HOURS).toEpochMilli(),
-                importance = 2,
-            ),
-            demoNotification(
-                sourceKey = "demo-shopping-1",
-                packageName = "com.amazon.mshop.android.shopping",
-                appLabel = "Amazon Shopping",
-                title = "Order shipped",
-                body = "Your phone stand arrives tomorrow.",
-                conversationTitle = null,
-                senderName = null,
-                category = "Shopping",
-                postedAt = now.minus(12, ChronoUnit.HOURS).toEpochMilli(),
-                lastSeenAt = now.minus(12, ChronoUnit.HOURS).toEpochMilli(),
-                importance = 1,
-            ),
-            demoNotification(
-                sourceKey = "demo-whatsapp-work-1",
-                packageName = "com.whatsapp.w4b",
-                appLabel = "WhatsApp Business",
-                title = "Studio Client",
-                body = "Please send the updated estimate today.",
-                conversationTitle = "Studio Client",
-                senderName = "Mira",
-                category = "Messages",
-                postedAt = now.minus(10, ChronoUnit.MINUTES).toEpochMilli(),
-                lastSeenAt = now.minus(5, ChronoUnit.MINUTES).toEpochMilli(),
-                importance = 5,
-                manualThreadLabel = "Studio Client",
-            ),
+        val now = System.currentTimeMillis()
+        val conversationSpecs = listOf(
+            Triple("com.whatsapp", "WhatsApp", "Weekend Trip"),
+            Triple("com.whatsapp.w4b", "WhatsApp Business", "Studio Client"),
+            Triple("org.telegram.messenger", "Telegram", "Launch Team"),
+            Triple("com.instagram.android", "Instagram", "Avery"),
         )
-
-        app.repository.replaceNotificationsForDemo(records)
-        app.settingsStore.reset(logAction = false)
+        val conversations = conversationSpecs.mapIndexed { index, (packageName, appLabel, title) ->
+            ConversationEntity(
+                id = index + 1L,
+                portableId = "demo-conversation-$index",
+                packageName = packageName,
+                appLabel = appLabel,
+                canonicalKey = "demo:${title.lowercase()}",
+                identitySource = "demo",
+                identityConfidence = 100,
+                sourceTitle = title,
+                manualTitle = null,
+                latestPreview = null,
+                latestActivityAt = now - index * 15L * 60_000L,
+                recordCount = 0,
+                messageCount = 0,
+                isPinned = index < 2,
+            )
+        }
+        val specs = listOf(
+            DemoSpec(1, "com.whatsapp", "WhatsApp", "Weekend Trip", "Alice", "Tickets are booked for Sunday morning.", 120),
+            DemoSpec(1, "com.whatsapp", "WhatsApp", "Weekend Trip", "Bob", "I'll bring snacks and chargers.", 80),
+            DemoSpec(2, "com.whatsapp.w4b", "WhatsApp Business", "Studio Client", "Mira", "Please send the updated estimate today.", 10),
+            DemoSpec(3, "org.telegram.messenger", "Telegram", "Launch Team", "Nina", "Reminder: QA freeze at 5 PM.", 25),
+            DemoSpec(4, "com.instagram.android", "Instagram", "Avery", "Avery", "Can you review the reel cover before lunch?", 40),
+            DemoSpec(null, "com.google.android.gm", "Gmail", "Release checklist approved", null, "QA approved the release checklist.", 180),
+            DemoSpec(null, "com.bank.app", "Acme Bank", "UPI payment received", null, "INR 1,250 received from Jordan.", 360),
+        )
+        val records = specs.mapIndexed { index, spec ->
+            val timestamp = now - spec.minutesAgo * 60_000L
+            NotificationRecordEntity(
+                id = index + 1L,
+                portableId = "demo-record-$index",
+                systemKey = "demo-key-$index",
+                packageName = spec.packageName,
+                appLabel = spec.appLabel,
+                notificationId = index,
+                notificationTag = null,
+                userId = 0,
+                channelId = "demo",
+                groupKey = null,
+                shortcutId = spec.conversationId?.let { "demo-$it" },
+                locusId = null,
+                lifecycleStartedAt = timestamp,
+                lastUpdatedAt = timestamp,
+                endedAt = null,
+                endReason = null,
+                latestTitle = spec.title,
+                latestBody = spec.body,
+                latestBigText = null,
+                latestSubText = null,
+                senderName = spec.sender,
+                conversationTitle = spec.conversationId?.let { spec.title },
+                category = if (spec.conversationId == null) "General" else "Messages",
+                tags = emptyList(),
+                importance = 3,
+                visibility = 0,
+                notificationFlags = 0,
+                revisionCount = 1,
+                conversationId = spec.conversationId?.toLong(),
+                isActive = false,
+                isGroupSummary = false,
+                wasRecovered = false,
+            )
+        }
+        val revisions = records.map { record ->
+            NotificationRevisionEntity(
+                id = record.id,
+                portableId = "demo-revision-${record.id}",
+                recordId = record.id,
+                contentFingerprint = "demo-${record.id}",
+                capturedAt = record.lastUpdatedAt,
+                sourcePostedAt = record.lifecycleStartedAt,
+                title = record.latestTitle,
+                body = record.latestBody,
+                bigText = null,
+                subText = null,
+                textLines = emptyList(),
+                senderName = record.senderName,
+                conversationTitle = record.conversationTitle,
+                category = record.category,
+                importance = record.importance,
+                extrasJson = "{\"demo\":true}",
+                isRecovered = false,
+            )
+        }
+        val messages = records.filter { it.conversationId != null }.map { record ->
+            ChatMessageEntity(
+                id = record.id,
+                portableId = "demo-message-${record.id}",
+                conversationId = requireNotNull(record.conversationId),
+                recordId = record.id,
+                revisionId = record.id,
+                messageFingerprint = "demo-${record.id}",
+                senderKey = null,
+                senderName = record.senderName,
+                text = record.latestBody,
+                sourceTimestamp = record.lastUpdatedAt,
+                capturedAt = record.lastUpdatedAt,
+                dataMimeType = null,
+                dataUri = null,
+                isHistoric = false,
+            )
+        }
+        app.repository.replaceAllForImport(conversations, records, revisions, messages)
         app.settingsStore.markOnboardingCompleted()
-        app.settingsStore.pinThread(buildThreadStableId("com.whatsapp", "Weekend Trip"))
-        app.settingsStore.pinThread(buildThreadStableId("com.whatsapp.w4b", "Studio Client"))
         app.settingsStore.setThemeMode(ThemeMode.Light)
     }
 
-    private fun demoNotification(
-        sourceKey: String,
-        packageName: String,
-        appLabel: String,
-        title: String,
-        body: String,
-        conversationTitle: String?,
-        senderName: String?,
-        category: String,
-        postedAt: Long,
-        lastSeenAt: Long,
-        importance: Int,
-        manualThreadLabel: String? = null,
-    ): NotificationEntity {
-        return NotificationEntity(
-            sourceKey = sourceKey,
-            packageName = packageName,
-            appLabel = appLabel,
-            notificationId = sourceKey.hashCode(),
-            notificationTag = null,
-            postedAt = postedAt,
-            lastSeenAt = lastSeenAt,
-            removedAt = null,
-            title = title,
-            body = body,
-            bigText = null,
-            category = category,
-            tags = emptyList(),
-            manualThreadLabel = manualThreadLabel,
-            threadKey = conversationTitle ?: title,
-            senderName = senderName,
-            conversationTitle = conversationTitle,
-            importance = importance,
-            extrasJson = """{"demo":true}""",
-            isRemoved = false,
-        )
-    }
+    private data class DemoSpec(
+        val conversationId: Int?,
+        val packageName: String,
+        val appLabel: String,
+        val title: String,
+        val sender: String?,
+        val body: String,
+        val minutesAgo: Int,
+    )
 }

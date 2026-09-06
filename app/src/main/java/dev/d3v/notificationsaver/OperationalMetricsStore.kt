@@ -7,6 +7,10 @@ import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +33,17 @@ data class OperationalSnapshot(
     val storeFailureCount: Int = 0,
     val removeFailureCount: Int = 0,
     val exportFailureCount: Int = 0,
+    val parseFailureCount: Int = 0,
+    val duplicateEventCount: Int = 0,
+    val messageCount: Int = 0,
+    val reconciliationCount: Int = 0,
+    val reconciledActiveCount: Int = 0,
+    val reconciledEndedCount: Int = 0,
+    val excludedEventCount: Int = 0,
+    val persistedBatchCount: Int = 0,
+    val persistedBatchEventCount: Int = 0,
+    val queueHighWaterMark: Int = 0,
+    val lastBatchLatencyMillis: Long = 0L,
     val lastAppStartAt: Long? = null,
     val lastListenerConnectedAt: Long? = null,
     val lastListenerDisconnectedAt: Long? = null,
@@ -41,11 +56,13 @@ data class OperationalSnapshot(
 
 class OperationalMetricsStore(
     context: Context,
+    private val scope: CoroutineScope,
     private val logger: AppLogger,
 ) {
     private val preferences: SharedPreferences =
         context.getSharedPreferences("notification_saver_operational_metrics", Context.MODE_PRIVATE)
     private val crashReportDir = File(context.filesDir, "crash-reports")
+    private val flushScheduled = AtomicBoolean(false)
 
     private val mutableState = MutableStateFlow(loadSnapshot())
     val state: StateFlow<OperationalSnapshot> = mutableState.asStateFlow()
@@ -136,6 +153,34 @@ class OperationalMetricsStore(
         }
     }
 
+    fun recordParseFailure() = update { copy(parseFailureCount = parseFailureCount + 1) }
+
+    fun recordDuplicateEvent() = update { copy(duplicateEventCount = duplicateEventCount + 1) }
+
+    fun recordMessagesStored(count: Int) = update { copy(messageCount = messageCount + count) }
+
+    fun recordExcludedEvent() = update { copy(excludedEventCount = excludedEventCount + 1) }
+
+    fun recordReconciliation(activeCount: Int, endedCount: Int) = update {
+        copy(
+            reconciliationCount = reconciliationCount + 1,
+            reconciledActiveCount = reconciledActiveCount + activeCount,
+            reconciledEndedCount = reconciledEndedCount + endedCount,
+        )
+    }
+
+    fun recordQueueDepth(depth: Int) = update {
+        if (depth <= queueHighWaterMark) this else copy(queueHighWaterMark = depth)
+    }
+
+    fun recordBatchPersisted(eventCount: Int, latencyMillis: Long) = update {
+        copy(
+            persistedBatchCount = persistedBatchCount + 1,
+            persistedBatchEventCount = persistedBatchEventCount + eventCount,
+            lastBatchLatencyMillis = latencyMillis,
+        )
+    }
+
     fun recordCrash(thread: Thread, throwable: Throwable) {
         val summary = writeCrashReport(thread, throwable)
         preferences.edit()
@@ -173,9 +218,22 @@ class OperationalMetricsStore(
     }
 
     private fun update(transform: OperationalSnapshot.() -> OperationalSnapshot) {
-        val updated = mutableState.value.transform()
-        saveSnapshot(updated)
-        mutableState.value = updated
+        synchronized(mutableState) {
+            mutableState.value = mutableState.value.transform()
+        }
+        scheduleFlush()
+    }
+
+    private fun scheduleFlush() {
+        if (!flushScheduled.compareAndSet(false, true)) return
+        scope.launch {
+            do {
+                delay(METRICS_FLUSH_DELAY_MILLIS)
+                val persisted = mutableState.value
+                saveSnapshot(persisted)
+                flushScheduled.set(false)
+            } while (persisted != mutableState.value && flushScheduled.compareAndSet(false, true))
+        }
     }
 
     private fun saveSnapshot(snapshot: OperationalSnapshot) {
@@ -189,6 +247,17 @@ class OperationalMetricsStore(
             .putInt(KEY_STORE_FAILURE_COUNT, snapshot.storeFailureCount)
             .putInt(KEY_REMOVE_FAILURE_COUNT, snapshot.removeFailureCount)
             .putInt(KEY_EXPORT_FAILURE_COUNT, snapshot.exportFailureCount)
+            .putInt(KEY_PARSE_FAILURE_COUNT, snapshot.parseFailureCount)
+            .putInt(KEY_DUPLICATE_EVENT_COUNT, snapshot.duplicateEventCount)
+            .putInt(KEY_MESSAGE_COUNT, snapshot.messageCount)
+            .putInt(KEY_RECONCILIATION_COUNT, snapshot.reconciliationCount)
+            .putInt(KEY_RECONCILED_ACTIVE_COUNT, snapshot.reconciledActiveCount)
+            .putInt(KEY_RECONCILED_ENDED_COUNT, snapshot.reconciledEndedCount)
+            .putInt(KEY_EXCLUDED_EVENT_COUNT, snapshot.excludedEventCount)
+            .putInt(KEY_PERSISTED_BATCH_COUNT, snapshot.persistedBatchCount)
+            .putInt(KEY_PERSISTED_BATCH_EVENT_COUNT, snapshot.persistedBatchEventCount)
+            .putInt(KEY_QUEUE_HIGH_WATER_MARK, snapshot.queueHighWaterMark)
+            .putLong(KEY_LAST_BATCH_LATENCY, snapshot.lastBatchLatencyMillis)
             .putLong(KEY_LAST_APP_START_AT, snapshot.lastAppStartAt ?: 0L)
             .putLong(KEY_LAST_LISTENER_CONNECTED_AT, snapshot.lastListenerConnectedAt ?: 0L)
             .putLong(KEY_LAST_LISTENER_DISCONNECTED_AT, snapshot.lastListenerDisconnectedAt ?: 0L)
@@ -210,6 +279,17 @@ class OperationalMetricsStore(
             storeFailureCount = preferences.getInt(KEY_STORE_FAILURE_COUNT, 0),
             removeFailureCount = preferences.getInt(KEY_REMOVE_FAILURE_COUNT, 0),
             exportFailureCount = preferences.getInt(KEY_EXPORT_FAILURE_COUNT, 0),
+            parseFailureCount = preferences.getInt(KEY_PARSE_FAILURE_COUNT, 0),
+            duplicateEventCount = preferences.getInt(KEY_DUPLICATE_EVENT_COUNT, 0),
+            messageCount = preferences.getInt(KEY_MESSAGE_COUNT, 0),
+            reconciliationCount = preferences.getInt(KEY_RECONCILIATION_COUNT, 0),
+            reconciledActiveCount = preferences.getInt(KEY_RECONCILED_ACTIVE_COUNT, 0),
+            reconciledEndedCount = preferences.getInt(KEY_RECONCILED_ENDED_COUNT, 0),
+            excludedEventCount = preferences.getInt(KEY_EXCLUDED_EVENT_COUNT, 0),
+            persistedBatchCount = preferences.getInt(KEY_PERSISTED_BATCH_COUNT, 0),
+            persistedBatchEventCount = preferences.getInt(KEY_PERSISTED_BATCH_EVENT_COUNT, 0),
+            queueHighWaterMark = preferences.getInt(KEY_QUEUE_HIGH_WATER_MARK, 0),
+            lastBatchLatencyMillis = preferences.getLong(KEY_LAST_BATCH_LATENCY, 0L),
             lastAppStartAt = preferences.getLongOrNull(KEY_LAST_APP_START_AT),
             lastListenerConnectedAt = preferences.getLongOrNull(KEY_LAST_LISTENER_CONNECTED_AT),
             lastListenerDisconnectedAt = preferences.getLongOrNull(KEY_LAST_LISTENER_DISCONNECTED_AT),
@@ -306,6 +386,17 @@ class OperationalMetricsStore(
         private const val KEY_STORE_FAILURE_COUNT = "store_failure_count"
         private const val KEY_REMOVE_FAILURE_COUNT = "remove_failure_count"
         private const val KEY_EXPORT_FAILURE_COUNT = "export_failure_count"
+        private const val KEY_PARSE_FAILURE_COUNT = "parse_failure_count"
+        private const val KEY_DUPLICATE_EVENT_COUNT = "duplicate_event_count"
+        private const val KEY_MESSAGE_COUNT = "message_count"
+        private const val KEY_RECONCILIATION_COUNT = "reconciliation_count"
+        private const val KEY_RECONCILED_ACTIVE_COUNT = "reconciled_active_count"
+        private const val KEY_RECONCILED_ENDED_COUNT = "reconciled_ended_count"
+        private const val KEY_EXCLUDED_EVENT_COUNT = "excluded_event_count"
+        private const val KEY_PERSISTED_BATCH_COUNT = "persisted_batch_count"
+        private const val KEY_PERSISTED_BATCH_EVENT_COUNT = "persisted_batch_event_count"
+        private const val KEY_QUEUE_HIGH_WATER_MARK = "queue_high_water_mark"
+        private const val KEY_LAST_BATCH_LATENCY = "last_batch_latency"
         private const val KEY_LAST_APP_START_AT = "last_app_start_at"
         private const val KEY_LAST_LISTENER_CONNECTED_AT = "last_listener_connected_at"
         private const val KEY_LAST_LISTENER_DISCONNECTED_AT = "last_listener_disconnected_at"
@@ -320,6 +411,7 @@ class OperationalMetricsStore(
         private const val KEY_LAST_CRASH_PATH = "last_crash_path"
         private const val MAX_CRASH_REPORT_FILES = 10
         private const val MAX_CRASH_REPORT_BYTES = 2L * 1024L * 1024L
+        private const val METRICS_FLUSH_DELAY_MILLIS = 2_000L
 
         private val crashFileFormatter: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")

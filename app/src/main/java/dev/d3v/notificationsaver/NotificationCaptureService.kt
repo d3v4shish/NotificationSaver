@@ -1,89 +1,67 @@
 package dev.d3v.notificationsaver
 
+import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
 
 class NotificationCaptureService : NotificationListenerService() {
     private val app: NotificationSaverApp
         get() = application as NotificationSaverApp
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val pendingEvents = ConcurrentHashMap<String, NotificationEvent>()
-    private val drainSignal = Channel<Unit>(capacity = Channel.CONFLATED)
-
-    override fun onCreate() {
-        super.onCreate()
-        serviceScope.launch {
-            for (ignored in drainSignal) {
-                while (true) {
-                    val next = pendingEvents.entries.firstOrNull() ?: break
-                    if (!pendingEvents.remove(next.key, next.value)) {
-                        continue
-                    }
-                    when (val event = next.value) {
-                        is NotificationEvent.Posted -> app.repository.recordPosted(event.notification)
-                        is NotificationEvent.Removed -> app.repository.recordRemoved(event.notification)
-                    }
-                }
-            }
-        }
-    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         app.operationalMetrics.recordListenerConnected()
         app.logger.info("NotificationCaptureService", "Notification listener connected")
+        val rankingMap = currentRanking
+        val recovered = activeNotifications.orEmpty().map { notification ->
+            CaptureEvent.Posted(
+                notification = notification,
+                rankingImportance = rankingMap.importanceFor(notification.key),
+                recovered = true,
+            )
+        }
+        app.notificationIngestor.submit(CaptureEvent.Reconcile(recovered))
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         app.operationalMetrics.recordListenerDisconnected()
-        app.logger.info("NotificationCaptureService", "Notification listener disconnected")
+        app.logger.warn("NotificationCaptureService", "Notification listener disconnected; requesting rebind")
+        requestRebind(ComponentName(this, NotificationCaptureService::class.java))
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+    override fun onNotificationPosted(
+        sbn: StatusBarNotification?,
+        rankingMap: RankingMap?,
+    ) {
         val notification = sbn ?: return
-        enqueue(NotificationEvent.Posted(notification))
+        app.notificationIngestor.submit(
+            CaptureEvent.Posted(
+                notification = notification,
+                rankingImportance = rankingMap.importanceFor(notification.key),
+                recovered = false,
+            ),
+        )
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+    override fun onNotificationRemoved(
+        sbn: StatusBarNotification?,
+        rankingMap: RankingMap?,
+        reason: Int,
+    ) {
         val notification = sbn ?: return
-        enqueue(NotificationEvent.Removed(notification))
-    }
-
-    override fun onDestroy() {
-        drainSignal.close()
-        serviceScope.cancel()
-        super.onDestroy()
-    }
-
-    private fun enqueue(event: NotificationEvent) {
-        pendingEvents[event.sourceKey] = event
-        if (drainSignal.trySend(Unit).isFailure) {
-            app.operationalMetrics.recordQueueDrop()
-            app.logger.error("NotificationCaptureService", "Dropping notification event because the queue is unavailable")
-        }
+        app.notificationIngestor.submit(
+            CaptureEvent.Removed(
+                notification = notification,
+                reason = reason,
+                rankingImportance = rankingMap.importanceFor(notification.key),
+            ),
+        )
     }
 }
 
-private sealed interface NotificationEvent {
-    val sourceKey: String
-
-    data class Posted(val notification: StatusBarNotification) : NotificationEvent {
-        override val sourceKey: String = notification.stableSourceKey()
-    }
-
-    data class Removed(val notification: StatusBarNotification) : NotificationEvent {
-        override val sourceKey: String = notification.stableSourceKey()
-    }
-}
-
-private fun StatusBarNotification.stableSourceKey(): String {
-    return key ?: "$packageName:$id:${tag.orEmpty()}"
+private fun NotificationListenerService.RankingMap?.importanceFor(key: String?): Int? {
+    if (this == null || key == null) return null
+    val ranking = NotificationListenerService.Ranking()
+    return if (getRanking(key, ranking)) ranking.importance else null
 }

@@ -4,32 +4,25 @@
 [![Release Build](https://github.com/d3v4shish/NotificationSaver/actions/workflows/release-build.yml/badge.svg)](https://github.com/d3v4shish/NotificationSaver/actions/workflows/release-build.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-173D2F)](LICENSE)
 
-Notification Saver is a local-first Android app that captures incoming notifications on-device and lets you revisit them later through a searchable timeline, per-app conversation tabs, and a prioritized chat list.
-
-<p align="center">
-  <img src="docs/assets/screenshots/timeline.png" alt="Timeline view" width="250" />
-  <img src="docs/assets/screenshots/threads.png" alt="Threads view" width="250" />
-  <img src="docs/assets/screenshots/priority.png" alt="Priority view" width="250" />
-</p>
+Notification Saver is a local-first Android app that records notification lifecycles and meaningful content updates in a searchable archive. Compatible messaging notifications are also reconstructed as conversations, regardless of source app.
 
 ## Why It Exists
 
 - Notification history stays on your device instead of being sent to a hosted backend.
-- Messaging notifications are grouped into conversation threads inside app tabs for WhatsApp, Instagram, and Telegram.
-- Important chats can be pinned, while the rest are surfaced in a local suggested-priority view.
-- Cleanup, export, logs, crash reports, and storage usage are visible from the app UI.
+- MessagingStyle, shortcut, locus, sender, and conversation metadata are used to build best-effort chat threads.
+- Repeated callbacks and noisy progress changes are deduplicated while content-distinct revisions are retained.
+- Cleanup, encrypted backup and restore, diagnostics, and storage usage are controlled in the app.
 
 ## Highlights
 
-- Timeline with search, app filters, category filters, and date filters
-- Threaded conversation tabs for WhatsApp, Instagram, and Telegram
-- Priority view with pinned and suggested conversations across apps
-- Light, dark, and follow-system theme modes
-- Privacy mode to hide previews in list views
-- Retention controls and per-app category overrides
-- Notification export and diagnostics export through the Android document picker
+- Paging-backed Inbox with full-text search, app, category, and date filters
+- Generic Chats view with app filtering, pinning, renaming, and extracted message history
+- Adaptive phone/tablet navigation using Material 3, edge-to-edge layouts, and dynamic color
+- Privacy controls for list previews, recents previews, screenshots, and device authentication
+- Keep-until-deleted default plus optional scheduled retention and per-app category rules
+- Password-encrypted, versioned backup/restore and readable JSON export through the Android document picker
 - Local log rotation, local crash reports, and visible operational counters
-- First-run tutorial and notification-listener permission guidance
+- Clear first-run disclosure and notification-listener permission guidance
 
 ## Install
 
@@ -57,8 +50,9 @@ If signing values are configured through `keystore.properties` or the `ANDROID_K
 
 ## Privacy And Data Handling
 
-- Captured notifications are stored locally in the app database.
-- The app does not intentionally upload notification contents to remote services.
+- Captured text and metadata are stored locally in the app database; notification images and attachments are not copied.
+- The app declares no internet permission and has no upload path for notification contents.
+- Android may redact or withhold some notifications, and history cannot be recovered for periods when listener access was unavailable.
 - Diagnostics bundles include app health metadata, logs, crash reports, and storage summaries.
 - Diagnostics bundles intentionally exclude notification titles, bodies, big text, and database exports.
 
@@ -93,6 +87,6 @@ GitHub Actions also runs:
 
 ## Notes
 
-- Thread grouping depends on notification metadata exposed by each source app.
+- Thread grouping is best-effort and depends on notification metadata exposed by each source app.
 - The committed screenshots use the built-in debug demo dataset.
 - `dist/landing-page/` is intentionally generated locally and ignored by Git.

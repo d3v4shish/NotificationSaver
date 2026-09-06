@@ -1,0 +1,13 @@
+HSPLdev/d3v/notificationsaver/NotificationSaverApp;->onCreate()V
+HSPLdev/d3v/notificationsaver/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLdev/d3v/notificationsaver/MainActivity;->onResume()V
+HSPLdev/d3v/notificationsaver/NotificationCaptureService;->onListenerConnected()V
+HSPLdev/d3v/notificationsaver/NotificationCaptureService;->onNotificationPosted(Landroid/service/notification/StatusBarNotification;Landroid/service/notification/NotificationListenerService$RankingMap;)V
+Ldev/d3v/notificationsaver/NotificationIngestor;
+Ldev/d3v/notificationsaver/NotificationParser;
+Ldev/d3v/notificationsaver/NotificationRepository;
+Ldev/d3v/notificationsaver/NotificationDatabase;
+Ldev/d3v/notificationsaver/NotificationDatabase_Impl;
+Ldev/d3v/notificationsaver/NotificationDao_Impl;
+Ldev/d3v/notificationsaver/MainViewModel;
+Ldev/d3v/notificationsaver/SettingsStore;

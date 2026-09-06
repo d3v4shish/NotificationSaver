@@ -1,0 +1,6 @@
+Ldev/d3v/notificationsaver/NotificationSaverApp;
+Ldev/d3v/notificationsaver/MainActivity;
+Ldev/d3v/notificationsaver/NotificationCaptureService;
+Ldev/d3v/notificationsaver/NotificationIngestor;
+Ldev/d3v/notificationsaver/NotificationParser;
+Ldev/d3v/notificationsaver/NotificationRepository;

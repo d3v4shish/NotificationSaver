@@ -5,6 +5,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.io.File
 
 class NotificationSaverApp : Application() {
@@ -18,11 +20,11 @@ class NotificationSaverApp : Application() {
     }
 
     val settingsStore: SettingsStore by lazy {
-        SettingsStore(this, logger)
+        SettingsStore(this, applicationScope, logger)
     }
 
     val operationalMetrics: OperationalMetricsStore by lazy {
-        OperationalMetricsStore(this, logger)
+        OperationalMetricsStore(this, applicationScope, logger)
     }
 
     val crashReporter: AppCrashReporter by lazy {
@@ -36,13 +38,38 @@ class NotificationSaverApp : Application() {
         NotificationDatabase.build(this)
     }
 
+    val notificationParser: NotificationParser by lazy {
+        NotificationParser(this, settingsStore)
+    }
+
     val repository: NotificationRepository by lazy {
         NotificationRepository(
             context = this,
+            database = database,
             notificationDao = database.notificationDao(),
             settingsStore = settingsStore,
             logger = logger,
             operationalMetrics = operationalMetrics,
+            parser = notificationParser,
+        )
+    }
+
+    val notificationIngestor: NotificationIngestor by lazy {
+        NotificationIngestor(
+            scope = applicationScope,
+            repository = repository,
+            operationalMetrics = operationalMetrics,
+            logger = logger,
+        )
+    }
+
+    val backupManager: BackupManager by lazy {
+        BackupManager(
+            context = this,
+            repository = repository,
+            settingsStore = settingsStore,
+            operationalMetrics = operationalMetrics,
+            logger = logger,
         )
     }
 
@@ -52,7 +79,14 @@ class NotificationSaverApp : Application() {
         operationalMetrics.recordAppStart()
         logger.info("NotificationSaverApp", "Application started")
         applicationScope.launch {
+            repository.migrateLegacyPins()
             repository.runRetentionCleanupNow()
+        }
+        applicationScope.launch {
+            settingsStore.state
+                .map { settings -> settings.retentionDays }
+                .distinctUntilChanged()
+                .collect { days -> RetentionScheduler.sync(this@NotificationSaverApp, days) }
         }
     }
 }
