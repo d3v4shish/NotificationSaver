@@ -2,6 +2,9 @@
 
 ## 1.0.0
 
+- Reworked the interface around the fixed technical-utility visual system, with compact controls, semantic color, and clearer navigation.
+- Added local source-app launcher icons with bounded background loading and a fallback when an icon is unavailable.
+- Made archive cleanup and retention refresh only affected conversation summaries within the same database transaction.
 - Rebuilt capture storage around notification lifecycles, content-distinct revisions, reconnect reconciliation, and full-text search.
 - Added generic threaded conversations for compatible messaging notifications from any app.
 - Added paging-backed Inbox and Chats screens with adaptive phone/tablet layouts.
