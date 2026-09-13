@@ -1,5 +1,11 @@
 # TODO
 
+## Root-tab chrome reduction
+
+- [x] Remove redundant top app bars from the primary Home, Chats, and Settings destinations.
+  - Contract: primary navigation remains available through the bottom bar or navigation rail; detail and nested Settings pages retain their Back affordance.
+  - Validation: lint, deterministic JVM tests, debug APK build, and an on-device launch pass. A device screenshot was intentionally not captured because it could expose private notification content.
+
 ## App-icon performance and correctness pass
 
 - [x] Establish a package-size baseline and audit source-app icon loading, capture, and retention paths.

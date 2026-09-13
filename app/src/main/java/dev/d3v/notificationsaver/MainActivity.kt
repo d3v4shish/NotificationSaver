@@ -604,7 +604,6 @@ private fun InboxScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.home)) })
         Row(Modifier.fillMaxSize()) {
             InboxList(
                 modifier = if (expanded) Modifier.weight(0.45f) else Modifier.fillMaxSize(),
@@ -930,7 +929,6 @@ private fun ChatsScreen(
         }
     }
     Column(Modifier.fillMaxSize()) {
-        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.chats)) })
         Row(Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = if (expanded) Modifier.weight(0.45f) else Modifier.fillMaxSize(),
@@ -1460,7 +1458,6 @@ private fun SettingsScreen(
     val accessGranted by viewModel.isNotificationAccessGranted.collectAsStateWithLifecycle()
     val context = LocalContext.current
     Column(Modifier.fillMaxSize()) {
-        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.settings)) })
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
