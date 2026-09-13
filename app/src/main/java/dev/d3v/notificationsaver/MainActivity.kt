@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.format.DateUtils
+import android.util.LruCache
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +21,8 @@ import androidx.activity.viewModels
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -44,6 +48,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.Archive
@@ -71,11 +76,11 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.Button as MaterialButton
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChip as MaterialFilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,7 +91,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedButton as MaterialOutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -100,22 +105,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -125,7 +138,10 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import java.util.concurrent.CancellationException
 import java.util.Locale
 
 @Serializable
@@ -243,7 +259,7 @@ private fun NotificationSaverRoot(
             if (settingsInitialized && settings.appLockEnabled) onLock()
         }
         if (!settingsInitialized) {
-            Surface(Modifier.fillMaxSize()) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Box(contentAlignment = Alignment.Center) { Text(stringResource(R.string.loading)) }
             }
         } else if (settings.appLockEnabled && !appUnlocked) {
@@ -261,7 +277,7 @@ private fun NotificationSaverRoot(
 
 @Composable
 private fun LockedScreen(onUnlock: () -> Unit) {
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier.padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -283,7 +299,7 @@ private fun LockedScreen(onUnlock: () -> Unit) {
 
 @Composable
 private fun OnboardingScreen(onOpenAccess: () -> Unit, onContinue: () -> Unit) {
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -330,7 +346,7 @@ private fun OnboardingScreen(onOpenAccess: () -> Unit, onContinue: () -> Unit) {
 
 @Composable
 private fun DisclosureCard(icon: ImageVector, titleRes: Int, bodyRes: Int) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+    UtilityCard(color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier.padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -726,27 +742,22 @@ private fun HomeSummaryCard(
     accessGranted: Boolean,
     onOpenAccess: () -> Unit,
 ) {
-    Surface(
-        color = if (accessGranted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-        shape = MaterialTheme.shapes.extraLarge,
+    UtilityCard(
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = if (accessGranted) Icons.Default.CheckCircle else Icons.Default.Notifications,
                     contentDescription = null,
-                    tint = if (accessGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    tint = if (accessGranted) UtilityColors.Success else MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(if (accessGranted) R.string.capture_ready else R.string.capture_needs_attention), fontWeight = FontWeight.SemiBold)
-                    Text(
-                        stringResource(if (accessGranted) R.string.capture_ready_body else R.string.capture_needs_attention_body),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                 }
                 if (!accessGranted) {
                     TextButton(onClick = onOpenAccess) { Text(stringResource(R.string.manage)) }
@@ -773,20 +784,19 @@ private fun HomeSummaryCard(
 @Composable
 private fun SummaryMetric(value: String, label: String, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
 @Composable
 private fun NotificationRow(record: NotificationRecordEntity, hidePreviews: Boolean, onClick: () -> Unit) {
-    Surface(
+    UtilityCard(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         ListItem(
-            leadingContent = { AppMonogram(record.appLabel) },
+            leadingContent = { AppIcon(record.packageName, record.appLabel) },
             headlineContent = {
                 Text(record.latestTitle ?: record.appLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
@@ -803,9 +813,9 @@ private fun NotificationRow(record: NotificationRecordEntity, hidePreviews: Bool
             },
             trailingContent = {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(relativeTime(record.lastUpdatedAt), style = MaterialTheme.typography.labelSmall)
+                    Text(relativeTime(record.lastUpdatedAt), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
                     if (record.revisionCount > 1) Text(pluralStringResource(R.plurals.updates_count, record.revisionCount, record.revisionCount), style = MaterialTheme.typography.labelSmall)
-                    if (record.isActive) Text(stringResource(R.string.active), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                    if (record.isActive) Text(stringResource(R.string.active), color = UtilityColors.Success, style = MaterialTheme.typography.labelSmall)
                 }
             }
         )
@@ -988,13 +998,13 @@ private fun ConversationRow(
     onOpen: () -> Unit,
     onPin: () -> Unit,
 ) {
-    Surface(
+    UtilityCard(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        emphasized = conversation.isPinned,
     ) {
         ListItem(
-            leadingContent = { AppMonogram(conversation.displayTitle) },
+            leadingContent = { AppIcon(conversation.packageName, conversation.appLabel) },
             headlineContent = { Text(conversation.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             supportingContent = {
                 Column {
@@ -1014,7 +1024,7 @@ private fun ConversationRow(
                             contentDescription = stringResource(if (conversation.isPinned) R.string.unpin else R.string.pin),
                         )
                     }
-                    Text(relativeTime(conversation.latestActivityAt), style = MaterialTheme.typography.labelSmall)
+                    Text(relativeTime(conversation.latestActivityAt), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
                 }
             }
         )
@@ -1091,11 +1101,11 @@ private fun RecordDetailContent(viewModel: MainViewModel) {
         item {
             DetailSection(stringResource(R.string.overview), Icons.Default.Info) {
                 DetailLine(stringResource(R.string.app), current.appLabel)
-                DetailLine(stringResource(R.string.package_name), current.packageName)
+                DetailLine(stringResource(R.string.package_name), current.packageName, technical = true)
                 DetailLine(stringResource(R.string.category), current.category)
-                DetailLine(stringResource(R.string.posted), fullTime(current.lifecycleStartedAt))
-                DetailLine(stringResource(R.string.last_update), fullTime(current.lastUpdatedAt))
-                current.endedAt?.let { DetailLine(stringResource(R.string.removed), fullTime(it)) }
+                DetailLine(stringResource(R.string.posted), fullTime(current.lifecycleStartedAt), technical = true)
+                DetailLine(stringResource(R.string.last_update), fullTime(current.lastUpdatedAt), technical = true)
+                current.endedAt?.let { DetailLine(stringResource(R.string.removed), fullTime(it), technical = true) }
                 current.conversationTitle?.let { DetailLine(stringResource(R.string.conversation), it) }
                 current.senderName?.let { DetailLine(stringResource(R.string.sender), it) }
             }
@@ -1211,15 +1221,14 @@ private fun ConversationDetailContent(viewModel: MainViewModel) {
 
 @Composable
 private fun ConversationEntry(entry: ConversationEntryRow) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
+    UtilityCard(
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             entry.senderName?.let { Text(it, fontWeight = FontWeight.SemiBold) }
             Text(entry.text ?: stringResource(R.string.no_preview))
-            Text(fullTime(entry.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(fullTime(entry.timestamp), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1282,9 +1291,9 @@ private fun LegacySettingsScreen(viewModel: MainViewModel, settings: AppSettings
                 ) {
                     SettingSwitchRow(
                         title = app.appLabel,
-                        description = app.packageName,
                         checked = app.packageName !in settings.excludedPackages,
                         onChange = { included -> viewModel.setPackageExcluded(app.packageName, !included) },
+                        detail = app.packageName,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
@@ -1333,10 +1342,10 @@ private fun LegacySettingsScreen(viewModel: MainViewModel, settings: AppSettings
             }
             item {
                 DetailSection(stringResource(R.string.privacy), Icons.Default.Shield) {
-                    SettingSwitchRow(stringResource(R.string.hide_list_previews), stringResource(R.string.hide_list_previews_body), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
-                    SettingSwitchRow(stringResource(R.string.hide_recents), stringResource(R.string.hide_recents_body), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
-                    SettingSwitchRow(stringResource(R.string.block_screenshots), stringResource(R.string.block_screenshots_body), settings.blockScreenshots, viewModel::setBlockScreenshots)
-                    SettingSwitchRow(stringResource(R.string.app_lock), stringResource(R.string.app_lock_body), settings.appLockEnabled, viewModel::setAppLockEnabled)
+                    SettingSwitchRow(stringResource(R.string.hide_list_previews), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
+                    SettingSwitchRow(stringResource(R.string.hide_recents), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
+                    SettingSwitchRow(stringResource(R.string.block_screenshots), settings.blockScreenshots, viewModel::setBlockScreenshots)
+                    SettingSwitchRow(stringResource(R.string.app_lock), settings.appLockEnabled, viewModel::setAppLockEnabled)
                     if (settings.appLockEnabled) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SettingsStore.APP_LOCK_TIMEOUT_OPTIONS.forEach { minutes ->
@@ -1397,7 +1406,6 @@ private fun LegacySettingsScreen(viewModel: MainViewModel, settings: AppSettings
                     }
                     SettingSwitchRow(
                         stringResource(R.string.restore_settings),
-                        stringResource(R.string.restore_settings_body),
                         restoreSettings,
                         { restoreSettings = it },
                     )
@@ -1459,10 +1467,10 @@ private fun SettingsScreen(
         ) {
             item { AccessStatus(accessGranted) { openNotificationListenerSettings(context) } }
             item { SectionTitle(stringResource(R.string.settings_for_your_data)) }
-            item { SettingsShortcut(Icons.Default.Notifications, R.string.capture_rules, R.string.capture_rules_summary, onOpenCapture) }
-            item { SettingsShortcut(Icons.Default.Shield, R.string.privacy_security, R.string.privacy_security_summary, onOpenPrivacy) }
-            item { SettingsShortcut(Icons.Default.Storage, R.string.storage_retention, R.string.storage_retention_summary, onOpenStorage) }
-            item { SettingsShortcut(Icons.Default.Backup, R.string.backups_export, R.string.backups_export_summary, onOpenBackup) }
+            item { SettingsShortcut(Icons.Default.Notifications, R.string.capture_rules, onOpenCapture) }
+            item { SettingsShortcut(Icons.Default.Shield, R.string.privacy_security, onOpenPrivacy) }
+            item { SettingsShortcut(Icons.Default.Storage, R.string.storage_retention, onOpenStorage) }
+            item { SettingsShortcut(Icons.Default.Backup, R.string.backups_export, onOpenBackup) }
             item {
                 DetailSection(stringResource(R.string.appearance), Icons.Default.Palette) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1473,18 +1481,17 @@ private fun SettingsScreen(
                 }
             }
             item { SectionTitle(stringResource(R.string.more)) }
-            item { SettingsShortcut(Icons.Default.Tune, R.string.advanced_support, R.string.advanced_support_summary, onOpenAdvanced) }
-            item { SettingsShortcut(Icons.Default.Info, R.string.about, R.string.about_summary, onOpenAbout) }
+            item { SettingsShortcut(Icons.Default.Tune, R.string.advanced_support, onOpenAdvanced) }
+            item { SettingsShortcut(Icons.Default.Info, R.string.about, onOpenAbout) }
         }
     }
 }
 
 @Composable
-private fun SettingsShortcut(icon: ImageVector, titleRes: Int, summaryRes: Int, onClick: () -> Unit) {
-    Surface(
+private fun SettingsShortcut(icon: ImageVector, titleRes: Int, onClick: () -> Unit) {
+    UtilityCard(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         ListItem(
             leadingContent = {
@@ -1493,7 +1500,13 @@ private fun SettingsShortcut(icon: ImageVector, titleRes: Int, summaryRes: Int, 
                 }
             },
             headlineContent = { Text(stringResource(titleRes), fontWeight = FontWeight.SemiBold) },
-            supportingContent = { Text(stringResource(summaryRes)) },
+            trailingContent = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
         )
     }
 }
@@ -1512,26 +1525,20 @@ private fun CaptureSettingsScreen(viewModel: MainViewModel, settings: AppSetting
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { AccessStatus(accessGranted) { openNotificationListenerSettings(context) } }
-            item {
-                DetailSection(stringResource(R.string.capture), Icons.Default.Notifications) {
-                    Text(stringResource(R.string.capture_all_default), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
             if (appSources.isNotEmpty()) item { SectionTitle(stringResource(R.string.included_apps)) }
             items(appSources, key = AppSource::packageName) { app ->
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
+                UtilityCard(color = MaterialTheme.colorScheme.surface) {
                     SettingSwitchRow(
                         title = app.appLabel,
-                        description = app.packageName,
                         checked = app.packageName !in settings.excludedPackages,
                         onChange = { included -> viewModel.setPackageExcluded(app.packageName, !included) },
+                        detail = app.packageName,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
             }
             item {
                 DetailSection(stringResource(R.string.category_rules), Icons.Default.Category) {
-                    Text(stringResource(R.string.category_rules_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedTextField(overridePackage, { overridePackage = it }, label = { Text(stringResource(R.string.package_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     OutlinedTextField(overrideCategory, { overrideCategory = it }, label = { Text(stringResource(R.string.category)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     Button(
@@ -1567,15 +1574,14 @@ private fun PrivacySettingsScreen(viewModel: MainViewModel, settings: AppSetting
         ) {
             item {
                 DetailSection(stringResource(R.string.privacy), Icons.Default.Shield) {
-                    SettingSwitchRow(stringResource(R.string.hide_list_previews), stringResource(R.string.hide_list_previews_body), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
-                    SettingSwitchRow(stringResource(R.string.hide_recents), stringResource(R.string.hide_recents_body), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
-                    SettingSwitchRow(stringResource(R.string.block_screenshots), stringResource(R.string.block_screenshots_body), settings.blockScreenshots, viewModel::setBlockScreenshots)
-                    SettingSwitchRow(stringResource(R.string.app_lock), stringResource(R.string.app_lock_body), settings.appLockEnabled, viewModel::setAppLockEnabled)
+                    SettingSwitchRow(stringResource(R.string.hide_list_previews), settings.hideNotificationPreviews, viewModel::setHideNotificationPreviews)
+                    SettingSwitchRow(stringResource(R.string.hide_recents), settings.hideRecentsPreview, viewModel::setHideRecentsPreview)
+                    SettingSwitchRow(stringResource(R.string.block_screenshots), settings.blockScreenshots, viewModel::setBlockScreenshots)
+                    SettingSwitchRow(stringResource(R.string.app_lock), settings.appLockEnabled, viewModel::setAppLockEnabled)
                 }
             }
             if (settings.appLockEnabled) item {
                 DetailSection(stringResource(R.string.lock_after), Icons.Default.Lock) {
-                    Text(stringResource(R.string.lock_after_body), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingsStore.APP_LOCK_TIMEOUT_OPTIONS.forEach { minutes ->
                             FilterChip(
@@ -1603,7 +1609,6 @@ private fun StorageSettingsScreen(viewModel: MainViewModel, settings: AppSetting
         ) {
             item {
                 DetailSection(stringResource(R.string.retention_storage), Icons.Default.Storage) {
-                    Text(stringResource(R.string.retention_explanation), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MainViewModel.RETENTION_OPTIONS.forEach { days ->
                             FilterChip(settings.retentionDays == days, { viewModel.setRetentionDays(days) }, { Text(retentionLabel(days)) })
@@ -1660,7 +1665,7 @@ private fun BackupSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         OutlinedButton(onClick = { viewModel.requestImport(password, ImportMode.Merge, restoreSettings) }) { Text(stringResource(R.string.import_merge)) }
                         TextButton(onClick = { confirmReplace = true }) { Text(stringResource(R.string.import_replace)) }
                     }
-                    SettingSwitchRow(stringResource(R.string.restore_settings), stringResource(R.string.restore_settings_body), restoreSettings, { restoreSettings = it })
+                    SettingSwitchRow(stringResource(R.string.restore_settings), restoreSettings, { restoreSettings = it })
                     HorizontalDivider()
                     TextButton(onClick = viewModel::requestReadableExport) { Text(stringResource(R.string.export_readable_json)) }
                 }
@@ -1757,16 +1762,16 @@ private fun SettingsPage(titleRes: Int, onBack: () -> Unit, content: @Composable
 
 @Composable
 private fun AccessStatus(granted: Boolean, onOpen: () -> Unit) {
-    Surface(
-        color = if (granted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-        shape = MaterialTheme.shapes.large,
+    val statusColor = if (granted) UtilityColors.Success else MaterialTheme.colorScheme.error
+    UtilityCard(
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                color = MaterialTheme.colorScheme.surface,
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = CircleShape,
                 modifier = Modifier.size(40.dp),
             ) {
@@ -1774,14 +1779,17 @@ private fun AccessStatus(granted: Boolean, onOpen: () -> Unit) {
                     Icon(
                         imageVector = if (granted) Icons.Default.CheckCircle else Icons.Default.Notifications,
                         contentDescription = null,
-                        tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        tint = statusColor,
                     )
                 }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(if (granted) R.string.access_enabled else R.string.access_needed), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(if (granted) R.string.access_enabled_body else R.string.access_needed_body), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = stringResource(if (granted) R.string.access_enabled else R.string.access_needed),
+                    color = statusColor,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
             TextButton(onClick = onOpen) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1793,12 +1801,137 @@ private fun AccessStatus(granted: Boolean, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun AppMonogram(label: String) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(42.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(label.trim().firstOrNull()?.uppercase() ?: "?", fontWeight = FontWeight.Bold)
+private fun AppIcon(packageName: String, fallbackLabel: String) {
+    val context = LocalContext.current.applicationContext
+    val cachedIcon = appIconCache.get(packageName)
+    val knownUnavailable = unavailableAppIcons.get(packageName) == true
+    val icon by produceState<ImageBitmap?>(
+        initialValue = cachedIcon,
+        key1 = packageName,
+    ) {
+        if (cachedIcon == null && !knownUnavailable) {
+            value = withContext(Dispatchers.IO) { loadAppIcon(context, packageName) }
         }
     }
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(42.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            val resolvedIcon = icon
+            if (resolvedIcon == null) {
+                Text(fallbackLabel.trim().firstOrNull()?.uppercase() ?: "?", fontWeight = FontWeight.Bold)
+            } else {
+                Image(
+                    bitmap = resolvedIcon,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().padding(3.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+        }
+    }
+}
+
+private const val APP_ICON_SIZE_PX = 128
+private const val APP_ICON_CACHE_SIZE = 48
+
+private val appIconCache = LruCache<String, ImageBitmap>(APP_ICON_CACHE_SIZE)
+private val unavailableAppIcons = LruCache<String, Boolean>(APP_ICON_CACHE_SIZE)
+
+private fun loadAppIcon(context: Context, packageName: String): ImageBitmap? {
+    appIconCache.get(packageName)?.let { return it }
+    if (unavailableAppIcons.get(packageName) == true) return null
+    return runCatching {
+        context.packageManager
+            .getApplicationIcon(packageName)
+            .toBitmap(APP_ICON_SIZE_PX, APP_ICON_SIZE_PX)
+            .asImageBitmap()
+            .also { appIconCache.put(packageName, it) }
+    }.getOrElse { error ->
+        if (error is CancellationException) throw error
+        unavailableAppIcons.put(packageName, true)
+        null
+    }
+}
+
+@Composable
+private fun Button(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    MaterialButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.small,
+        content = content,
+    )
+}
+
+@Composable
+private fun OutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    MaterialOutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.small,
+        content = content,
+    )
+}
+
+@Composable
+private fun FilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    MaterialFilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = modifier,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.extraSmall,
+    )
+}
+
+@Composable
+private fun UtilityCard(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.surface,
+    borderColor: Color? = null,
+    emphasized: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val shape = MaterialTheme.shapes.medium
+    val visibleBorder = borderColor ?: if (emphasized) {
+        if (LocalUtilityDarkTheme.current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
+    } else {
+        null
+    }
+    Surface(
+        modifier = modifier
+            .shadow(2.dp, shape, clip = false)
+            .then(
+                if (visibleBorder == null) Modifier else Modifier.border(
+                    width = if (emphasized) 2.dp else 1.dp,
+                    color = visibleBorder,
+                    shape = shape,
+                ),
+            ),
+        shape = shape,
+        color = color,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        content = content,
+    )
 }
 
 @Composable
@@ -1807,7 +1940,7 @@ private fun DetailSection(
     icon: ImageVector? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+    UtilityCard(color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 icon?.let {
@@ -1833,25 +1966,32 @@ private fun DetailSection(
 @Composable
 private fun SettingSwitchRow(
     title: String,
-    description: String,
     checked: Boolean,
     onChange: (Boolean) -> Unit,
+    detail: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            detail?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Switch(checked, onChange)
     }
 }
 
 @Composable
-private fun DetailLine(label: String, value: String) {
+private fun DetailLine(label: String, value: String, technical: Boolean = false) {
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value)
+        Text(value, fontFamily = if (technical) FontFamily.Monospace else FontFamily.SansSerif)
     }
 }
 
@@ -1880,7 +2020,7 @@ private fun SelectionHint(icon: ImageVector, messageRes: Int) {
 
 @Composable
 private fun EmptyState(icon: ImageVector, titleRes: Int, bodyRes: Int) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
+    UtilityCard(color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -1915,7 +2055,11 @@ private fun LoadingState() {
 
 @Composable
 private fun ErrorState(onRetry: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.large) {
+    UtilityCard(
+        color = UtilityColors.ErrorContainer,
+        borderColor = UtilityColors.Error,
+        emphasized = true,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

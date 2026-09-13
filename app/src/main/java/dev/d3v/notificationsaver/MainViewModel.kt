@@ -42,10 +42,15 @@ enum class DateWindow(val days: Int?) {
     Last30Days(30),
     Last90Days(90);
 
-    fun fromTimestamp(now: Long = System.currentTimeMillis()): Long? {
+    fun fromTimestamp(
+        now: Long = System.currentTimeMillis(),
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): Long? {
         if (this == Today) {
-            return LocalDate.now()
-                .atStartOfDay(ZoneId.systemDefault())
+            return Instant.ofEpochMilli(now)
+                .atZone(zoneId)
+                .toLocalDate()
+                .atStartOfDay(zoneId)
                 .toInstant()
                 .toEpochMilli()
         }

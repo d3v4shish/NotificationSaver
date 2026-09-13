@@ -1,5 +1,6 @@
 package dev.d3v.notificationsaver
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -181,6 +182,7 @@ class OperationalMetricsStore(
         )
     }
 
+    @SuppressLint("ApplySharedPref") // A crash handler must synchronously persist its last report.
     fun recordCrash(thread: Thread, throwable: Throwable) {
         val summary = writeCrashReport(thread, throwable)
         preferences.edit()

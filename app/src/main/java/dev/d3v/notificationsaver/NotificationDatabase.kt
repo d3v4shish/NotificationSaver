@@ -469,15 +469,35 @@ interface NotificationDao {
 
     @Query(
         """
+        SELECT DISTINCT conversationId FROM notification_records
+        WHERE conversationId IS NOT NULL
+          AND (:packageName IS NULL OR packageName = :packageName)
+          AND (:fromTimestamp IS NULL OR lastUpdatedAt >= :fromTimestamp)
+        """,
+    )
+    suspend fun conversationIdsForFilteredRecords(packageName: String?, fromTimestamp: Long?): List<Long>
+
+    @Query(
+        """
         DELETE FROM notification_records
         WHERE (:packageName IS NULL OR packageName = :packageName)
           AND (:fromTimestamp IS NULL OR lastUpdatedAt >= :fromTimestamp)
         """,
     )
-    suspend fun deleteFiltered(packageName: String?, fromTimestamp: Long?)
+    suspend fun deleteFiltered(packageName: String?, fromTimestamp: Long?): Int
+
+    @Query(
+        """
+        SELECT DISTINCT conversationId FROM notification_records
+        WHERE conversationId IS NOT NULL
+          AND lastUpdatedAt < :cutoffTimestamp
+          AND isActive = 0
+        """,
+    )
+    suspend fun conversationIdsForOlderRecords(cutoffTimestamp: Long): List<Long>
 
     @Query("DELETE FROM notification_records WHERE lastUpdatedAt < :cutoffTimestamp AND isActive = 0")
-    suspend fun deleteOlderThan(cutoffTimestamp: Long)
+    suspend fun deleteOlderThan(cutoffTimestamp: Long): Int
 
     @Query("DELETE FROM notification_records")
     suspend fun clearRecords()

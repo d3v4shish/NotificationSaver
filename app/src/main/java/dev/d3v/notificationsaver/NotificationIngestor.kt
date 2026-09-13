@@ -65,13 +65,16 @@ class NotificationIngestor(
     }
 
     fun submit(event: CaptureEvent): EnqueueResult {
+        // Increment before publishing so the consumer cannot decrement an event it has not
+        // yet been counted for.
+        val depth = pendingCount.incrementAndGet()
         val result = channel.trySend(event)
         if (result.isFailure) {
+            pendingCount.decrementAndGet()
             operationalMetrics.recordQueueDrop()
             logger.error("NotificationIngestor", "Capture channel is closed")
             return EnqueueResult.Closed
         }
-        val depth = pendingCount.incrementAndGet()
         operationalMetrics.recordQueueDepth(depth)
         return EnqueueResult.Accepted
     }

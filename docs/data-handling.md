@@ -7,6 +7,7 @@
 - Logs: local runtime logs rotated in app storage
 - Crash reports: local uncaught exception reports with retention limits
 - Cache: transient app-managed files
+- Package visibility: source app package names and launcher icons are resolved locally to label archive rows; this inventory is not stored separately or sent off-device
 
 ## Diagnostics Export
 

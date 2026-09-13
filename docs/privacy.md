@@ -5,6 +5,7 @@ Notification Saver stores captured notification history locally on your Android 
 ## What The App Stores
 
 - App label and package name
+- Source app launcher icon, resolved locally for list presentation
 - Notification timestamps
 - Title, body, expanded text, text lines, and content-distinct revisions when available
 - Conversation name, sender name, and extracted MessagingStyle text messages when available
@@ -17,6 +18,7 @@ Notification Saver stores captured notification history locally on your Android 
 - It does not copy notification images or attachments into the archive.
 - It does not include notification contents in diagnostics exports.
 - It does not require a cloud account.
+- It does not upload the local app inventory used to resolve launcher icons.
 
 ## User Controls
 

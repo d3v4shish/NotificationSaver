@@ -147,11 +147,23 @@ class NotificationRepository(
     }
 
     suspend fun deleteFiltered(packageName: String?, dateWindow: DateWindow) = withContext(Dispatchers.IO) {
-        notificationDao.deleteFiltered(
-            packageName = packageName?.trimmedOrNull(),
-            fromTimestamp = dateWindow.fromTimestamp(),
-        )
-        removeEmptyConversations()
+        database.withTransaction {
+            val normalizedPackageName = packageName?.trimmedOrNull()
+            val fromTimestamp = dateWindow.fromTimestamp()
+            val affectedConversationIds = notificationDao.conversationIdsForFilteredRecords(
+                packageName = normalizedPackageName,
+                fromTimestamp = fromTimestamp,
+            )
+            val deleted = notificationDao.deleteFiltered(
+                packageName = normalizedPackageName,
+                fromTimestamp = fromTimestamp,
+            )
+            if (deleted > 0) {
+                for (conversationId in affectedConversationIds) {
+                    refreshConversation(conversationId)
+                }
+            }
+        }
         logger.info("NotificationRepository", "Deleted filtered notification records")
     }
 
@@ -527,12 +539,6 @@ class NotificationRepository(
         )
     }
 
-    private suspend fun removeEmptyConversations() {
-        notificationDao.getAllConversationsForExport().forEach { conversation ->
-            refreshConversation(conversation.id)
-        }
-    }
-
     private suspend fun maybeRunRetentionCleanup(now: Long) {
         if (now - lastRetentionCleanupAt < RETENTION_CLEANUP_INTERVAL_MILLIS) return
         lastRetentionCleanupAt = now
@@ -542,8 +548,16 @@ class NotificationRepository(
     private suspend fun applyRetentionPolicy() {
         val retentionDays = settingsStore.current().retentionDays
         if (retentionDays <= 0) return
-        notificationDao.deleteOlderThan(System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY)
-        removeEmptyConversations()
+        database.withTransaction {
+            val cutoffTimestamp = System.currentTimeMillis() - retentionDays * MILLIS_PER_DAY
+            val affectedConversationIds = notificationDao.conversationIdsForOlderRecords(cutoffTimestamp)
+            val deleted = notificationDao.deleteOlderThan(cutoffTimestamp)
+            if (deleted > 0) {
+                for (conversationId in affectedConversationIds) {
+                    refreshConversation(conversationId)
+                }
+            }
+        }
     }
 
     private suspend fun importRows(
@@ -694,14 +708,17 @@ private sealed interface PreparedEvent {
     ) : PreparedEvent
 }
 
-private fun String.toFtsQuery(): String? {
+internal fun String.toFtsQuery(): String? {
     val terms = trim()
-        .split(Regex("\\s+"))
-        .map { term -> term.replace(Regex("[^\\p{L}\\p{N}_-]"), "") }
+        .split(ftsWhitespace)
+        .map { term -> term.replace(ftsUnsupportedCharacter, "") }
         .filter(String::isNotBlank)
     if (terms.isEmpty()) return null
     return terms.joinToString(" AND ") { term -> "\"$term\"*" }
 }
+
+private val ftsWhitespace = Regex("\\s+")
+private val ftsUnsupportedCharacter = Regex("[^\\p{L}\\p{N}_-]")
 
 private fun OperationalSnapshot.toJson(): JSONObject {
     return JSONObject()

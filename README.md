@@ -17,7 +17,7 @@ Notification Saver is a local-first Android app that records notification lifecy
 
 - Paging-backed Inbox with full-text search, app, category, and date filters
 - Generic Chats view with app filtering, pinning, renaming, and extracted message history
-- Adaptive phone/tablet navigation using Material 3, edge-to-edge layouts, and dynamic color
+- Adaptive phone/tablet navigation using Material 3, edge-to-edge layouts, and a fixed technical utility theme
 - Privacy controls for list previews, recents previews, screenshots, and device authentication
 - Keep-until-deleted default plus optional scheduled retention and per-app category rules
 - Password-encrypted, versioned backup/restore and readable JSON export through the Android document picker
@@ -77,6 +77,8 @@ GitHub Actions also runs:
 - CodeQL analysis
 - Release packaging and publishing for version tags
 
+For reproducible local commands, see [Build and Run](BUILD.md).
+
 ## Project Docs
 
 - [Contributing](CONTRIBUTING.md)
@@ -84,6 +86,9 @@ GitHub Actions also runs:
 - [Changelog](CHANGELOG.md)
 - [Releasing](RELEASING.md)
 - [Screenshot Capture Checklist](docs/screenshot-capture.md)
+- [Architecture](ARCHITECTURE.md)
+- [Benchmarks](BENCHMARKS.md)
+- [Hotspots](HOTSPOTS.md)
 
 ## Notes
 
